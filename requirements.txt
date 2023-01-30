@@ -5,3 +5,7 @@ ftfy
 tensorboard
 Jinja2
 datasets
+#needed for cars datasets
+scipy
+matplotlib
+wandb
