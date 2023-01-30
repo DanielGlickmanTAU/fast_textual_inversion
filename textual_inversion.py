@@ -12,7 +12,7 @@
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
-
+from src.misc import compute
 import argparse
 import logging
 import math
@@ -515,20 +515,25 @@ def main():
         elif args.output_dir is not None:
             os.makedirs(args.output_dir, exist_ok=True)
 
+    cache_dir = compute.get_cache_dir()
     # Load tokenizer
     if args.tokenizer_name:
-        tokenizer = CLIPTokenizer.from_pretrained(args.tokenizer_name)
+        tokenizer = CLIPTokenizer.from_pretrained(args.tokenizer_name, cache_dir=cache_dir, )
+
     elif args.pretrained_model_name_or_path:
-        tokenizer = CLIPTokenizer.from_pretrained(args.pretrained_model_name_or_path, subfolder="tokenizer")
+        tokenizer = CLIPTokenizer.from_pretrained(args.pretrained_model_name_or_path, cache_dir=cache_dir,
+                                                  subfolder="tokenizer")
 
     # Load scheduler and models
-    noise_scheduler = DDPMScheduler.from_pretrained(args.pretrained_model_name_or_path, subfolder="scheduler")
+    noise_scheduler = DDPMScheduler.from_pretrained(args.pretrained_model_name_or_path, cache_dir=cache_dir,
+                                                    subfolder="scheduler")
     text_encoder = CLIPTextModel.from_pretrained(
-        args.pretrained_model_name_or_path, subfolder="text_encoder", revision=args.revision
+        args.pretrained_model_name_or_path, cache_dir=cache_dir, subfolder="text_encoder", revision=args.revision
     )
-    vae = AutoencoderKL.from_pretrained(args.pretrained_model_name_or_path, subfolder="vae", revision=args.revision)
+    vae = AutoencoderKL.from_pretrained(args.pretrained_model_name_or_path, cache_dir=cache_dir, subfolder="vae",
+                                        revision=args.revision)
     unet = UNet2DConditionModel.from_pretrained(
-        args.pretrained_model_name_or_path, subfolder="unet", revision=args.revision
+        args.pretrained_model_name_or_path, cache_dir=cache_dir, subfolder="unet", revision=args.revision
     )
 
     # Add the placeholder token in tokenizer
@@ -780,7 +785,7 @@ def main():
             )
             # create pipeline (note: unet and vae are loaded again in float32)
             pipeline = DiffusionPipeline.from_pretrained(
-                args.pretrained_model_name_or_path,
+                args.pretrained_model_name_or_path, cache_dir=cache_dir,
                 text_encoder=accelerator.unwrap_model(text_encoder),
                 revision=args.revision,
             )
@@ -822,7 +827,7 @@ def main():
             save_full_model = not args.only_save_embeds
         if save_full_model:
             pipeline = StableDiffusionPipeline.from_pretrained(
-                args.pretrained_model_name_or_path,
+                args.pretrained_model_name_or_path, cache_dir=cache_dir,
                 text_encoder=accelerator.unwrap_model(text_encoder),
                 vae=vae,
                 unet=unet,
