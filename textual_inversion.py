@@ -12,6 +12,7 @@
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
+import cars_dataset
 from src.misc import compute
 import wandb
 import argparse
@@ -388,7 +389,10 @@ class TextualInversionDataset(Dataset):
         self.center_crop = center_crop
         self.flip_p = flip_p
 
-        self.image_paths = [os.path.join(self.data_root, file_path) for file_path in os.listdir(self.data_root)]
+        if type(data_root) == str:
+            self.image_paths = [os.path.join(self.data_root, file_path) for file_path in os.listdir(self.data_root)]
+        else:
+            self.image_paths = data_root
 
         self.num_images = len(self.image_paths)
         self._length = self.num_images
@@ -410,8 +414,9 @@ class TextualInversionDataset(Dataset):
         return self._length
 
     def __getitem__(self, i):
-        example = {}
-        image = Image.open(self.image_paths[i % self.num_images])
+        image = self.image_paths[i % self.num_images]
+        if type(image) == str:
+            image = Image.open(image)
 
         if not image.mode == "RGB":
             image = image.convert("RGB")
@@ -422,6 +427,7 @@ class TextualInversionDataset(Dataset):
         placeholder_string = self.placeholder_token
         text = random.choice(self.templates).format(placeholder_string)
 
+        example = {}
         example["input_ids"] = self.tokenizer(
             text,
             padding="max_length",
@@ -429,8 +435,6 @@ class TextualInversionDataset(Dataset):
             max_length=self.tokenizer.model_max_length,
             return_tensors="pt",
         ).input_ids[0]
-
-
 
         if self.center_crop:
             crop = min(img.shape[0], img.shape[1])
@@ -604,6 +608,7 @@ def main():
     )
 
     # Dataset and DataLoaders creation:
+
     train_dataset = TextualInversionDataset(
         data_root=args.train_data_dir,
         tokenizer=tokenizer,
