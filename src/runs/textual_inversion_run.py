@@ -10,6 +10,10 @@ from src.misc.slurm import run_on_slurm
 food_num_classes = 101
 food_split = 'test'
 
+quick = True
+validation_epochs = 10
+# quick = False
+# validation_epochs = 500
 params = {
     '--pretrained_model_name_or_path': 'runwayml/stable-diffusion-v1-5',
     '--placeholder_token': 'my_new_token',
@@ -26,7 +30,7 @@ params = {
     '--save_steps': 10,
     '--validation_prompt': '"An image of "',
     '--num_validation_images': 1,
-    '--validation_epochs': 500
+    '--validation_epochs': validation_epochs
 
 }
 
@@ -40,7 +44,7 @@ ids = []
 for p in gridsearch(params, params_for_exp):
     cls = random.randint(0, food_num_classes)
     k = random.randint(4, 8)
-    state = get_datasetstate_with_k_random_indices_with_label('food', label=cls, k=k, split=food_split, quick=False)
+    state = get_datasetstate_with_k_random_indices_with_label('food', label=cls, k=k, split=food_split, quick=quick)
     p['--as_json'] = ''
     train_output_dir = get_food_dir() + '/training_output/' + str(random.randint(0, 1_000_000_000 ** 2))
     p['--output_dir'] = train_output_dir
@@ -48,7 +52,6 @@ for p in gridsearch(params, params_for_exp):
     dataset_state_json_ = p['--output_dir'] + '/dataset_state.json'
     json.dump(state.__dict__, open(dataset_state_json_, 'w'))
     p['--train_data_dir'] = dataset_state_json_
-    # '--output_dir': be_random,
 
     id = run_on_slurm(job_name, params={}, no_flag_param=p, sleep=5, wandb=False)
     ids.append(id)
