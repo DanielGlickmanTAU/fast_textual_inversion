@@ -626,11 +626,12 @@ def train_epoch(accelerator, args, cache_dir, epoch, first_epoch, global_step, l
 
         # Checks if the accelerator has performed an optimization step behind the scenes
         if accelerator.sync_gradients:
-            progress_bar.update(1)
-            global_step += 1
             if global_step % args.save_steps == 0:
                 save_path = os.path.join(args.output_dir, f"learned_embeds-steps-{global_step}.bin")
                 save_progress(text_encoder, placeholder_token_id, accelerator, args, save_path)
+
+            progress_bar.update(1)
+            global_step += 1
 
             if global_step % args.checkpointing_steps == 0:
                 if accelerator.is_main_process:
