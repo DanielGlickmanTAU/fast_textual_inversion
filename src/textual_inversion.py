@@ -670,7 +670,7 @@ def train_epoch(accelerator, args, cache_dir, epoch, first_epoch, global_step, l
             if args.validation_prompt is not None and global_step % args.validation_epochs == 0:
                 args.validation_prompt = args.validation_prompt.replace('{}', args.placeholder_token)
                 if args.placeholder_token not in args.validation_prompt:
-                    args.validation_prompt += ' ' + args.placeholder_token
+                    args.validation_prompt = args.validation_prompt.strip() + ' ' + args.placeholder_token
                 do_validation(accelerator, args, cache_dir, epoch, text_encoder, unet, vae, tokenizer)
 
         logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
