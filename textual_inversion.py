@@ -13,6 +13,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 from src.misc import compute
+import wandb
 import argparse
 import logging
 import math
@@ -672,29 +673,10 @@ def main():
     first_epoch = 0
 
     # Potentially load in the weights and states from a previous save
+    resume_step = None
     if args.resume_from_checkpoint:
-        if args.resume_from_checkpoint != "latest":
-            path = os.path.basename(args.resume_from_checkpoint)
-        else:
-            # Get the most recent checkpoint
-            dirs = os.listdir(args.output_dir)
-            dirs = [d for d in dirs if d.startswith("checkpoint")]
-            dirs = sorted(dirs, key=lambda x: int(x.split("-")[1]))
-            path = dirs[-1] if len(dirs) > 0 else None
-
-        if path is None:
-            accelerator.print(
-                f"Checkpoint '{args.resume_from_checkpoint}' does not exist. Starting a new training run."
-            )
-            args.resume_from_checkpoint = None
-        else:
-            accelerator.print(f"Resuming from checkpoint {path}")
-            accelerator.load_state(os.path.join(args.output_dir, path))
-            global_step = int(path.split("-")[1])
-
-            resume_global_step = global_step * args.gradient_accumulation_steps
-            first_epoch = global_step // num_update_steps_per_epoch
-            resume_step = resume_global_step % (num_update_steps_per_epoch * args.gradient_accumulation_steps)
+        first_epoch, global_step, resume_step = resume_from_checkpoint(accelerator, args, first_epoch, global_step,
+                                                                       num_update_steps_per_epoch)
 
     # Only show the progress bar once on each machine.
     progress_bar = tqdm(range(global_step, args.max_train_steps), disable=not accelerator.is_local_main_process)
@@ -704,118 +686,9 @@ def main():
     orig_embeds_params = accelerator.unwrap_model(text_encoder).get_input_embeddings().weight.data.clone()
 
     for epoch in range(first_epoch, args.num_train_epochs):
-        text_encoder.train()
-        for step, batch in enumerate(train_dataloader):
-            # Skip steps until we reach the resumed step
-            if args.resume_from_checkpoint and epoch == first_epoch and step < resume_step:
-                if step % args.gradient_accumulation_steps == 0:
-                    progress_bar.update(1)
-                continue
-
-            with accelerator.accumulate(text_encoder):
-                # Convert images to latent space
-                latents = vae.encode(batch["pixel_values"].to(dtype=weight_dtype)).latent_dist.sample().detach()
-                latents = latents * vae.config.scaling_factor
-
-                # Sample noise that we'll add to the latents
-                noise = torch.randn_like(latents)
-                bsz = latents.shape[0]
-                # Sample a random timestep for each image
-                timesteps = torch.randint(0, noise_scheduler.config.num_train_timesteps, (bsz,), device=latents.device)
-                timesteps = timesteps.long()
-
-                # Add noise to the latents according to the noise magnitude at each timestep
-                # (this is the forward diffusion process)
-                noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
-
-                # Get the text embedding for conditioning
-                encoder_hidden_states = text_encoder(batch["input_ids"])[0].to(dtype=weight_dtype)
-
-                # Predict the noise residual
-                model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
-
-                # Get the target for loss depending on the prediction type
-                if noise_scheduler.config.prediction_type == "epsilon":
-                    target = noise
-                elif noise_scheduler.config.prediction_type == "v_prediction":
-                    target = noise_scheduler.get_velocity(latents, noise, timesteps)
-                else:
-                    raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
-
-                loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
-
-                accelerator.backward(loss)
-
-                optimizer.step()
-                lr_scheduler.step()
-                optimizer.zero_grad()
-
-                # Let's make sure we don't update any embedding weights besides the newly added token
-                index_no_updates = torch.arange(len(tokenizer)) != placeholder_token_id
-                with torch.no_grad():
-                    accelerator.unwrap_model(text_encoder).get_input_embeddings().weight[
-                        index_no_updates
-                    ] = orig_embeds_params[index_no_updates]
-
-            # Checks if the accelerator has performed an optimization step behind the scenes
-            if accelerator.sync_gradients:
-                progress_bar.update(1)
-                global_step += 1
-                if global_step % args.save_steps == 0:
-                    save_path = os.path.join(args.output_dir, f"learned_embeds-steps-{global_step}.bin")
-                    save_progress(text_encoder, placeholder_token_id, accelerator, args, save_path)
-
-                if global_step % args.checkpointing_steps == 0:
-                    if accelerator.is_main_process:
-                        save_path = os.path.join(args.output_dir, f"checkpoint-{global_step}")
-                        accelerator.save_state(save_path)
-                        logger.info(f"Saved state to {save_path}")
-
-            logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
-            progress_bar.set_postfix(**logs)
-            accelerator.log(logs, step=global_step)
-
-            if global_step >= args.max_train_steps:
-                break
-
-        if args.validation_prompt is not None and epoch % args.validation_epochs == 0:
-            logger.info(
-                f"Running validation... \n Generating {args.num_validation_images} images with prompt:"
-                f" {args.validation_prompt}."
-            )
-            # create pipeline (note: unet and vae are loaded again in float32)
-            pipeline = DiffusionPipeline.from_pretrained(
-                args.pretrained_model_name_or_path, cache_dir=cache_dir,
-                text_encoder=accelerator.unwrap_model(text_encoder),
-                revision=args.revision,
-            )
-            pipeline.scheduler = DPMSolverMultistepScheduler.from_config(pipeline.scheduler.config)
-            pipeline = pipeline.to(accelerator.device)
-            pipeline.set_progress_bar_config(disable=True)
-
-            # run inference
-            generator = (
-                None if args.seed is None else torch.Generator(device=accelerator.device).manual_seed(args.seed)
-            )
-            prompt = args.num_validation_images * [args.validation_prompt]
-            images = pipeline(prompt, num_inference_steps=25, generator=generator).images
-
-            for tracker in accelerator.trackers:
-                if tracker.name == "tensorboard":
-                    np_images = np.stack([np.asarray(img) for img in images])
-                    tracker.writer.add_images("validation", np_images, epoch, dataformats="NHWC")
-                if tracker.name == "wandb":
-                    tracker.log(
-                        {
-                            "validation": [
-                                wandb.Image(image, caption=f"{i}: {args.validation_prompt}")
-                                for i, image in enumerate(images)
-                            ]
-                        }
-                    )
-
-            del pipeline
-            torch.cuda.empty_cache()
+        train_epoch(accelerator, args, cache_dir, epoch, first_epoch, global_step, lr_scheduler, noise_scheduler,
+                    optimizer, orig_embeds_params, placeholder_token_id, progress_bar, resume_step, text_encoder,
+                    tokenizer, train_dataloader, unet, vae, weight_dtype)
 
     # Create the pipeline using using the trained modules and save it.
     accelerator.wait_for_everyone()
@@ -842,6 +715,154 @@ def main():
             repo.push_to_hub(commit_message="End of training", blocking=False, auto_lfs_prune=True)
 
     accelerator.end_training()
+
+
+def train_epoch(accelerator, args, cache_dir, epoch, first_epoch, global_step, lr_scheduler, noise_scheduler, optimizer,
+                orig_embeds_params, placeholder_token_id, progress_bar, resume_step, text_encoder, tokenizer,
+                train_dataloader, unet, vae, weight_dtype):
+    text_encoder.train()
+    for step, batch in enumerate(train_dataloader):
+        # Skip steps until we reach the resumed step
+        if args.resume_from_checkpoint and epoch == first_epoch and step < resume_step:
+            if step % args.gradient_accumulation_steps == 0:
+                progress_bar.update(1)
+            continue
+
+        with accelerator.accumulate(text_encoder):
+            # Convert images to latent space
+            latents = vae.encode(batch["pixel_values"].to(dtype=weight_dtype)).latent_dist.sample().detach()
+            latents = latents * vae.config.scaling_factor
+
+            # Sample noise that we'll add to the latents
+            noise = torch.randn_like(latents)
+            bsz = latents.shape[0]
+            # Sample a random timestep for each image
+            timesteps = torch.randint(0, noise_scheduler.config.num_train_timesteps, (bsz,), device=latents.device)
+            timesteps = timesteps.long()
+
+            # Add noise to the latents according to the noise magnitude at each timestep
+            # (this is the forward diffusion process)
+            noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
+
+            # Get the text embedding for conditioning
+            encoder_hidden_states = text_encoder(batch["input_ids"])[0].to(dtype=weight_dtype)
+
+            # Predict the noise residual
+            model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
+
+            # Get the target for loss depending on the prediction type
+            if noise_scheduler.config.prediction_type == "epsilon":
+                target = noise
+            elif noise_scheduler.config.prediction_type == "v_prediction":
+                target = noise_scheduler.get_velocity(latents, noise, timesteps)
+            else:
+                raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
+
+            loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+
+            accelerator.backward(loss)
+
+            optimizer.step()
+            lr_scheduler.step()
+            optimizer.zero_grad()
+
+            # Let's make sure we don't update any embedding weights besides the newly added token
+            index_no_updates = torch.arange(len(tokenizer)) != placeholder_token_id
+            with torch.no_grad():
+                accelerator.unwrap_model(text_encoder).get_input_embeddings().weight[
+                    index_no_updates
+                ] = orig_embeds_params[index_no_updates]
+
+        # Checks if the accelerator has performed an optimization step behind the scenes
+        if accelerator.sync_gradients:
+            progress_bar.update(1)
+            global_step += 1
+            if global_step % args.save_steps == 0:
+                save_path = os.path.join(args.output_dir, f"learned_embeds-steps-{global_step}.bin")
+                save_progress(text_encoder, placeholder_token_id, accelerator, args, save_path)
+
+            if global_step % args.checkpointing_steps == 0:
+                if accelerator.is_main_process:
+                    save_path = os.path.join(args.output_dir, f"checkpoint-{global_step}")
+                    accelerator.save_state(save_path)
+                    logger.info(f"Saved state to {save_path}")
+
+        logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
+        progress_bar.set_postfix(**logs)
+        accelerator.log(logs, step=global_step)
+
+        if global_step >= args.max_train_steps:
+            break
+    if args.validation_prompt is not None and epoch % args.validation_epochs == 0:
+        args.validation_prompt = args.validation_prompt.replace('{}', args.placeholder_token).replace('{}',
+                                                                                                      args.placeholder_token)
+        if args.placeholder_token not in args.validation_prompt:
+            args.validation_prompt += ' ' + args.placeholder_token
+        do_validation(accelerator, args, cache_dir, epoch, text_encoder, unet, vae)
+
+
+def do_validation(accelerator, args, cache_dir, epoch, text_encoder, unet, vae):
+    logger.info(
+        f"Running validation... \n Generating {args.num_validation_images} images with prompt:"
+        f" {args.validation_prompt}."
+    )
+    # create pipeline (note: unet and vae are loaded again in float32)
+    pipeline = DiffusionPipeline.from_pretrained(
+        args.pretrained_model_name_or_path, cache_dir=cache_dir,
+        text_encoder=accelerator.unwrap_model(text_encoder),
+        unet=accelerator.unwrap_model(unet),
+        vae=accelerator.unwrap_model(vae),
+        revision=args.revision,
+    )
+    pipeline.scheduler = DPMSolverMultistepScheduler.from_config(pipeline.scheduler.config)
+    pipeline = pipeline.to(accelerator.device)
+    pipeline.set_progress_bar_config(disable=True)
+    # run inference
+    generator = (
+        None if args.seed is None else torch.Generator(device=accelerator.device).manual_seed(args.seed)
+    )
+    prompt = args.num_validation_images * [args.validation_prompt]
+    images = pipeline(prompt, num_inference_steps=25, generator=generator).images
+    for tracker in accelerator.trackers:
+        if tracker.name == "tensorboard":
+            np_images = np.stack([np.asarray(img) for img in images])
+            tracker.writer.add_images("validation", np_images, epoch, dataformats="NHWC")
+        if tracker.name == "wandb":
+            tracker.log(
+                {
+                    "validation": [
+                        wandb.Image(image, caption=f"{i}: {args.validation_prompt}")
+                        for i, image in enumerate(images)
+                    ]
+                }
+            )
+    del pipeline
+    torch.cuda.empty_cache()
+
+
+def resume_from_checkpoint(accelerator, args, first_epoch, global_step, num_update_steps_per_epoch):
+    if args.resume_from_checkpoint != "latest":
+        path = os.path.basename(args.resume_from_checkpoint)
+    else:
+        # Get the most recent checkpoint
+        dirs = os.listdir(args.output_dir)
+        dirs = [d for d in dirs if d.startswith("checkpoint")]
+        dirs = sorted(dirs, key=lambda x: int(x.split("-")[1]))
+        path = dirs[-1] if len(dirs) > 0 else None
+    if path is None:
+        accelerator.print(
+            f"Checkpoint '{args.resume_from_checkpoint}' does not exist. Starting a new training run."
+        )
+        args.resume_from_checkpoint = None
+    else:
+        accelerator.print(f"Resuming from checkpoint {path}")
+        accelerator.load_state(os.path.join(args.output_dir, path))
+        global_step = int(path.split("-")[1])
+
+        resume_global_step = global_step * args.gradient_accumulation_steps
+        first_epoch = global_step // num_update_steps_per_epoch
+        resume_step = resume_global_step % (num_update_steps_per_epoch * args.gradient_accumulation_steps)
+    return first_epoch, global_step, resume_step
 
 
 if __name__ == "__main__":
