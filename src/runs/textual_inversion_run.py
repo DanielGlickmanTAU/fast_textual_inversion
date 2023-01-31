@@ -44,8 +44,9 @@ ids = []
 for p in gridsearch(params, params_for_exp):
     cls = random.randint(0, food_num_classes)
     k = random.randint(4, 8)
-    state = get_datasetstate_with_k_random_indices_with_label('food', label=cls, k=k, split=food_split, quick=quick)
     p['--as_json'] = ''
+    p['--num_images'] = k
+    state = get_datasetstate_with_k_random_indices_with_label('food', label=cls, k=k, split=food_split, quick=quick)
     train_output_dir = get_food_dir() + '/training_output/' + str(random.randint(0, 1_000_000_000 ** 2))
     p['--output_dir'] = train_output_dir
     os.makedirs(p['--output_dir'])
