@@ -416,6 +416,9 @@ class TextualInversionDataset(Dataset):
         if not image.mode == "RGB":
             image = image.convert("RGB")
 
+        # default to score-sde preprocessing
+        img = np.array(image).astype(np.uint8)
+
         placeholder_string = self.placeholder_token
         text = random.choice(self.templates).format(placeholder_string)
 
@@ -427,8 +430,7 @@ class TextualInversionDataset(Dataset):
             return_tensors="pt",
         ).input_ids[0]
 
-        # default to score-sde preprocessing
-        img = np.array(image).astype(np.uint8)
+
 
         if self.center_crop:
             crop = min(img.shape[0], img.shape[1])
