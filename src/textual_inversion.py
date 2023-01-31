@@ -354,7 +354,7 @@ def main():
             create_repo(repo_name, exist_ok=True, token=args.hub_token)
             repo = Repository(args.output_dir, clone_from=repo_name, token=args.hub_token)
 
-            with open(os.path.join(args.output_dir, ".gitignore"), "w+") as gitignore:
+            with open(os.path.join(args.output_dir, "../.gitignore"), "w+") as gitignore:
                 if "step_*" not in gitignore:
                     gitignore.write("step_*\n")
                 if "epoch_*" not in gitignore:

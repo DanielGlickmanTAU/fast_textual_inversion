@@ -1,3 +1,6 @@
+import os
+from dataclasses import dataclass
+
 import torch
 import torchvision
 import matplotlib.pyplot as plt
@@ -7,30 +10,60 @@ from collections import defaultdict
 import random
 
 
+def get_project_dir():
+    pwd = os.popen('pwd').read()
+    # no / at the end
+    return pwd[:pwd.index('/fast_textual_inversion') + len('/fast_textual_inversion')]
+
+
 def get_cars_ds():
-    ds = torchvision.datasets.StanfordCars(root='./cars_data', download=True)  # ,transform=transforms.ToTensor())
+    ds = torchvision.datasets.StanfordCars(root=f'{get_project_dir()}/cars_data',
+                                           download=True)  # ,transform=transforms.ToTensor())
     return ds
 
 
 def get_food_ds(split='test'):
-    return torchvision.datasets.Food101(root='./food_data',
+    return torchvision.datasets.Food101(root=f'{get_project_dir()}/food_data',
                                         download=True, split=split)  # ,transform=transforms.ToTensor())
 
 
 def get_celeba_ds():
-    return torchvision.datasets.CelebA(root='./celeba_data', download=True)
+    return torchvision.datasets.CelebA(root=f'{get_project_dir()}/celeba_data', download=True)
 
 
-def select_random_items(dataset, label, k):
-    data_items = []
+@dataclass
+class DatasetState:
+    name: str
+    indices: list
+    split: str = 'train'
+
+
+def select_k_random_indices_with_label(dataset, label, k, min_allowed_examples=3):
     label_index = []
     for i, data in enumerate(dataset):
         if data[1] == label:
-            data_items.append(data[0])
             label_index.append(i)
+    k = min(k, len(label_index))
+    if k < min_allowed_examples:
+        raise ValueError(
+            f'needs at least {min_allowed_examples} images with label {label}, but have only {len(label_index)}')
     selected_index = random.sample(label_index, k)
-    selected_data = [dataset[i] for i in selected_index]
-    return selected_data
+    return selected_index
+
+
+def get_datasetstate_with_k_random_indices_with_label(ds_name, label, k, min_allowed_examples=3, split='train'):
+    if ds_name == 'food':
+        ds = get_food_ds(split=split)
+
+    indices = select_k_random_indices_with_label(ds, label, k, min_allowed_examples)
+    return DatasetState(ds_name, indices, split)
+
+
+def get_images_from_dataset_state(dataset_state: DatasetState):
+    img_index = 0
+    if dataset_state.name == 'food':
+        ds = get_food_ds(split=dataset_state.split)
+        return [ds[i][img_index] for i in dataset_state.indices]
 
 
 def show_img(tensor):
