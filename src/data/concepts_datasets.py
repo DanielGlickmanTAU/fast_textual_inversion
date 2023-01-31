@@ -1,5 +1,6 @@
 import os
 from dataclasses import dataclass
+from typing import Union
 
 import torch
 import torchvision
@@ -22,8 +23,12 @@ def get_cars_ds():
     return ds
 
 
+def get_food_dir():
+    return f'{get_project_dir()}/food_data'
+
+
 def get_food_ds(split='test'):
-    return torchvision.datasets.Food101(root=f'{get_project_dir()}/food_data',
+    return torchvision.datasets.Food101(root=get_food_dir(),
                                         download=True, split=split)  # ,transform=transforms.ToTensor())
 
 
@@ -59,11 +64,13 @@ def get_datasetstate_with_k_random_indices_with_label(ds_name, label, k, min_all
     return DatasetState(ds_name, indices, split)
 
 
-def get_images_from_dataset_state(dataset_state: DatasetState):
+def get_images_from_dataset_state(dataset_state: Union[DatasetState, dict]):
+    if isinstance(dataset_state, DatasetState):
+        dataset_state = dataset_state.__dict__
     img_index = 0
-    if dataset_state.name == 'food':
-        ds = get_food_ds(split=dataset_state.split)
-        return [ds[i][img_index] for i in dataset_state.indices]
+    if dataset_state['name'] == 'food':
+        ds = get_food_ds(split=dataset_state['split'])
+        return [ds[i][img_index] for i in dataset_state['indices']]
 
 
 def show_img(tensor):

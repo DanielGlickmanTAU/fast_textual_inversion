@@ -12,6 +12,9 @@
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
+import json
+
+from src.data import concepts_datasets
 from src.data.textual_inversion_dataset import TextualInversionDataset
 from src.misc import compute
 import wandb
@@ -172,6 +175,14 @@ def parse_args():
         action="store_true",
         default=False,
         help="Scale the learning rate by the number of GPUs, gradient accumulation steps, and batch size.",
+    )
+
+    parser.add_argument(
+        '--as_json',
+        action='store_true',
+        default=False,
+        help="wheter the train_data_dir is a json with datasetstate object"
+
     )
     parser.add_argument(
         "--lr_scheduler",
@@ -448,9 +459,14 @@ def main():
     )
 
     # Dataset and DataLoaders creation:
+    if args.as_json:
+        state = json.loads(args.train_data_dir)
+        images = concepts_datasets.get_images_from_dataset_state(state)
+    else:
+        images = args.train_data_dir
 
     train_dataset = TextualInversionDataset(
-        data_root=args.train_data_dir,
+        data_root=images,
         tokenizer=tokenizer,
         size=args.resolution,
         placeholder_token=args.placeholder_token,
