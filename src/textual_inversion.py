@@ -636,7 +636,7 @@ def train_epoch(accelerator, args, cache_dir, epoch, first_epoch, global_step, l
             loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
 
             accelerator.backward(loss)
-
+            # tokenizer.decode(batch['input_ids'].view(-1),skip_special_tokens=True)
             optimizer.step()
             lr_scheduler.step()
             optimizer.zero_grad()
@@ -664,11 +664,10 @@ def train_epoch(accelerator, args, cache_dir, epoch, first_epoch, global_step, l
                     logger.info(f"Saved state to {save_path}")
 
             if args.validation_prompt is not None and global_step % args.validation_epochs == 0:
-                args.validation_prompt = args.validation_prompt.replace('{}', args.placeholder_token).replace('{}',
-                                                                                                              args.placeholder_token)
+                args.validation_prompt = args.validation_prompt.replace('{}', args.placeholder_token)
                 if args.placeholder_token not in args.validation_prompt:
                     args.validation_prompt += ' ' + args.placeholder_token
-                do_validation(accelerator, args, cache_dir, epoch, text_encoder, unet, vae)
+                do_validation(accelerator, args, cache_dir, epoch, text_encoder, unet, vae, tokenizer)
 
         logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
         progress_bar.set_postfix(**logs)
@@ -679,7 +678,7 @@ def train_epoch(accelerator, args, cache_dir, epoch, first_epoch, global_step, l
     return loss
 
 
-def do_validation(accelerator, args, cache_dir, epoch, text_encoder, unet, vae):
+def do_validation(accelerator, args, cache_dir, epoch, text_encoder, unet, vae, tokenizer):
     logger.info(
         f"Running validation... \n Generating {args.num_validation_images} images with prompt:"
         f" {args.validation_prompt}."
@@ -690,6 +689,7 @@ def do_validation(accelerator, args, cache_dir, epoch, text_encoder, unet, vae):
         text_encoder=accelerator.unwrap_model(text_encoder),
         unet=accelerator.unwrap_model(unet),
         vae=accelerator.unwrap_model(vae),
+        tokenizer=tokenizer,
         revision=args.revision,
     )
     pipeline.scheduler = DPMSolverMultistepScheduler.from_config(pipeline.scheduler.config)
