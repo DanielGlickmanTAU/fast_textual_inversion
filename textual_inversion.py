@@ -56,7 +56,6 @@ from torchvision import transforms
 from tqdm.auto import tqdm
 from transformers import CLIPTextModel, CLIPTokenizer
 
-
 # ------------------------------------------------------------------------------
 
 
@@ -297,9 +296,6 @@ def parse_args():
         raise ValueError("You must specify a train data directory.")
 
     return args
-
-
-
 
 
 def get_full_repo_name(model_id: str, organization: Optional[str] = None, token: Optional[str] = None):
@@ -639,18 +635,19 @@ def train_epoch(accelerator, args, cache_dir, epoch, first_epoch, global_step, l
                     accelerator.save_state(save_path)
                     logger.info(f"Saved state to {save_path}")
 
+            if args.validation_prompt is not None and global_step % args.validation_epochs == 0:
+                args.validation_prompt = args.validation_prompt.replace('{}', args.placeholder_token).replace('{}',
+                                                                                                              args.placeholder_token)
+                if args.placeholder_token not in args.validation_prompt:
+                    args.validation_prompt += ' ' + args.placeholder_token
+                do_validation(accelerator, args, cache_dir, epoch, text_encoder, unet, vae)
+
         logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
         progress_bar.set_postfix(**logs)
         accelerator.log(logs, step=global_step)
 
         if global_step >= args.max_train_steps:
             break
-    if args.validation_prompt is not None and epoch % args.validation_epochs == 0:
-        args.validation_prompt = args.validation_prompt.replace('{}', args.placeholder_token).replace('{}',
-                                                                                                      args.placeholder_token)
-        if args.placeholder_token not in args.validation_prompt:
-            args.validation_prompt += ' ' + args.placeholder_token
-        do_validation(accelerator, args, cache_dir, epoch, text_encoder, unet, vae)
 
 
 def do_validation(accelerator, args, cache_dir, epoch, text_encoder, unet, vae):
