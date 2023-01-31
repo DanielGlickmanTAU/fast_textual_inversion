@@ -68,14 +68,25 @@ check_min_version("0.13.0.dev0")
 logger = get_logger(__name__)
 
 
-def save_progress(text_encoder, placeholder_token_id, accelerator, args, save_path):
+def save_progress(text_encoder, placeholder_token_id, accelerator, args, save_path, loss):
     logger.info("Saving embeddings")
     learned_embeds = accelerator.unwrap_model(text_encoder).get_input_embeddings().weight[placeholder_token_id]
-    learned_embeds_dict = {args.placeholder_token: learned_embeds.detach().cpu()}
+    learned_embeds_dict = {args.placeholder_token: learned_embeds.detach().cpu()
+                           'loss': loss.item()}
     torch.save(learned_embeds_dict, save_path)
 
 
 def parse_args():
+    def str2bool(v):
+        if isinstance(v, bool):
+            return v
+        if v.lower() in ('yes', 'true', 't', 'y', '1'):
+            return True
+        elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+            return False
+        else:
+            raise argparse.ArgumentTypeError('Boolean value expected.')
+
     parser = argparse.ArgumentParser(description="Simple example of a training script.")
     parser.add_argument(
         "--save_steps",
@@ -460,7 +471,7 @@ def main():
 
     # Dataset and DataLoaders creation:
     if args.as_json:
-        state = json.loads(args.train_data_dir)
+        state = json.load(open(args.train_data_dir, 'r'))
         images = concepts_datasets.get_images_from_dataset_state(state)
     else:
         images = args.train_data_dir
@@ -549,9 +560,9 @@ def main():
     orig_embeds_params = accelerator.unwrap_model(text_encoder).get_input_embeddings().weight.data.clone()
 
     for epoch in range(first_epoch, args.num_train_epochs):
-        train_epoch(accelerator, args, cache_dir, epoch, first_epoch, global_step, lr_scheduler, noise_scheduler,
-                    optimizer, orig_embeds_params, placeholder_token_id, progress_bar, resume_step, text_encoder,
-                    tokenizer, train_dataloader, unet, vae, weight_dtype)
+        loss = train_epoch(accelerator, args, cache_dir, epoch, first_epoch, global_step, lr_scheduler, noise_scheduler,
+                           optimizer, orig_embeds_params, placeholder_token_id, progress_bar, resume_step, text_encoder,
+                           tokenizer, train_dataloader, unet, vae, weight_dtype)
 
     # Create the pipeline using using the trained modules and save it.
     accelerator.wait_for_everyone()
@@ -572,7 +583,7 @@ def main():
             pipeline.save_pretrained(args.output_dir)
         # Save the newly trained embeddings
         save_path = os.path.join(args.output_dir, "learned_embeds.bin")
-        save_progress(text_encoder, placeholder_token_id, accelerator, args, save_path)
+        save_progress(text_encoder, placeholder_token_id, accelerator, args, save_path, loss)
 
         if args.push_to_hub:
             repo.push_to_hub(commit_message="End of training", blocking=False, auto_lfs_prune=True)
@@ -640,7 +651,7 @@ def train_epoch(accelerator, args, cache_dir, epoch, first_epoch, global_step, l
         if accelerator.sync_gradients:
             if global_step % args.save_steps == 0:
                 save_path = os.path.join(args.output_dir, f"learned_embeds-steps-{global_step}.bin")
-                save_progress(text_encoder, placeholder_token_id, accelerator, args, save_path)
+                save_progress(text_encoder, placeholder_token_id, accelerator, args, save_path, loss)
 
             progress_bar.update(1)
             global_step += 1
@@ -664,6 +675,7 @@ def train_epoch(accelerator, args, cache_dir, epoch, first_epoch, global_step, l
 
         if global_step >= args.max_train_steps:
             break
+    return loss
 
 
 def do_validation(accelerator, args, cache_dir, epoch, text_encoder, unet, vae):

@@ -43,11 +43,14 @@ class DatasetState:
     split: str = 'train'
 
 
-def select_k_random_indices_with_label(dataset, label, k, min_allowed_examples=3):
+# quick is for fast debugging
+def select_k_random_indices_with_label(dataset, label, k, min_allowed_examples=3, quick=False):
     label_index = []
     for i, data in enumerate(dataset):
         if data[1] == label:
             label_index.append(i)
+            if quick and len(label_index) == k:
+                break
     k = min(k, len(label_index))
     if k < min_allowed_examples:
         raise ValueError(
@@ -56,11 +59,12 @@ def select_k_random_indices_with_label(dataset, label, k, min_allowed_examples=3
     return selected_index
 
 
-def get_datasetstate_with_k_random_indices_with_label(ds_name, label, k, min_allowed_examples=3, split='train'):
+def get_datasetstate_with_k_random_indices_with_label(ds_name, label, k, min_allowed_examples=3, split='train',
+                                                      quick=False):
     if ds_name == 'food':
         ds = get_food_ds(split=split)
 
-    indices = select_k_random_indices_with_label(ds, label, k, min_allowed_examples)
+    indices = select_k_random_indices_with_label(ds, label, k, min_allowed_examples, quick=quick)
     return DatasetState(ds_name, indices, split)
 
 
