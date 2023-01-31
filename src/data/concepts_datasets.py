@@ -78,7 +78,9 @@ def get_images_from_dataset_state(dataset_state: Union[DatasetState, dict]):
 
 
 def show_img(tensor):
-    if type(tensor) == torch.Tensor and tensor.shape[0] == 3:
-        tensor = tensor.permute(1, 2, 0)
+    if type(tensor) == torch.Tensor:
+        tensor = tensor.cpu().squeeze()
+        if tensor.shape[0] == 3:
+            tensor = tensor.permute(1, 2, 0)
     plt.imshow(tensor)
     plt.show()
