@@ -334,6 +334,10 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
         return f"{organization}/{model_id}"
 
 
+first_epoch = 0
+global_step = 0
+
+
 def main():
     args = parse_args()
     logging_dir = os.path.join(args.output_dir, args.logging_dir)
@@ -548,14 +552,13 @@ def main():
     logger.info(f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}")
     logger.info(f"  Gradient Accumulation steps = {args.gradient_accumulation_steps}")
     logger.info(f"  Total optimization steps = {args.max_train_steps}")
-    global_step = 0
-    first_epoch = 0
 
+    global global_step
+    global first_epoch
     # Potentially load in the weights and states from a previous save
     resume_step = None
     if args.resume_from_checkpoint:
-        first_epoch, global_step, resume_step = resume_from_checkpoint(accelerator, args, first_epoch, global_step,
-                                                                       num_update_steps_per_epoch)
+        first_epoch, global_step, resume_step = resume_from_checkpoint(accelerator, args, first_epoch)
 
     # Only show the progress bar once on each machine.
     progress_bar = tqdm(range(global_step, args.max_train_steps), disable=not accelerator.is_local_main_process)
@@ -565,7 +568,7 @@ def main():
     orig_embeds_params = accelerator.unwrap_model(text_encoder).get_input_embeddings().weight.data.clone()
 
     for epoch in range(first_epoch, args.num_train_epochs):
-        loss = train_epoch(accelerator, args, cache_dir, epoch, first_epoch, global_step, lr_scheduler, noise_scheduler,
+        loss = train_epoch(accelerator, args, cache_dir, epoch, lr_scheduler, noise_scheduler,
                            optimizer, orig_embeds_params, placeholder_token_id, progress_bar, resume_step, text_encoder,
                            tokenizer, train_dataloader, unet, vae, weight_dtype)
 
@@ -596,9 +599,11 @@ def main():
     accelerator.end_training()
 
 
-def train_epoch(accelerator, args, cache_dir, epoch, first_epoch, global_step, lr_scheduler, noise_scheduler, optimizer,
+def train_epoch(accelerator, args, cache_dir, epoch, lr_scheduler, noise_scheduler, optimizer,
                 orig_embeds_params, placeholder_token_id, progress_bar, resume_step, text_encoder, tokenizer,
                 train_dataloader, unet, vae, weight_dtype):
+    global global_step
+    global first_epoch
     text_encoder.train()
     for step, batch in enumerate(train_dataloader):
         # Skip steps until we reach the resumed step
@@ -722,7 +727,9 @@ def do_validation(accelerator, args, cache_dir, epoch, text_encoder, unet, vae, 
     torch.cuda.empty_cache()
 
 
-def resume_from_checkpoint(accelerator, args, first_epoch, global_step, num_update_steps_per_epoch):
+def resume_from_checkpoint(accelerator, args, num_update_steps_per_epoch):
+    global first_epoch
+    global global_step
     if args.resume_from_checkpoint != "latest":
         path = os.path.basename(args.resume_from_checkpoint)
     else:
