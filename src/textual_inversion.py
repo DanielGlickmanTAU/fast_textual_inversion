@@ -69,7 +69,7 @@ logger = get_logger(__name__)
 
 
 def save_progress(text_encoder, placeholder_token_id, accelerator, args, save_path, loss):
-    logger.info("Saving embeddings")
+    logger.info(f"Saving embeddings to {save_path}")
     learned_embeds = accelerator.unwrap_model(text_encoder).get_input_embeddings().weight[placeholder_token_id]
     learned_embeds_dict = {args.placeholder_token: learned_embeds.detach().cpu(),
                            'loss': loss.item()}
