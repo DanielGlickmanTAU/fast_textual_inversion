@@ -312,6 +312,8 @@ def parse_args():
     parser.add_argument(
         '--num_images', type=int, default=0, help="Number of images"
     )
+    parser.add_argument('--label_used', type=str, default='',
+                        help="Label of the images in the datasets. used for analysis and debug")
 
     args = parser.parse_args()
     env_local_rank = int(os.environ.get("LOCAL_RANK", -1))
