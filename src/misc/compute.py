@@ -27,7 +27,7 @@ def is_university_server():
 def get_cache_dir():
     if is_university_server():
         return '/specific/netapp5_wolf/wolf/turing/glickman/cache/cache'
-    return None
+    return '~/cache'
 
 
 def get_index_of_free_gpus(minimum_free_giga=minimum_free_giga):
