@@ -498,7 +498,8 @@ def main():
         set="train",
     )
     train_dataloader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=args.train_batch_size, shuffle=True, num_workers=args.dataloader_num_workers
+        train_dataset, batch_size=args.train_batch_size, shuffle=True, num_workers=args.dataloader_num_workers,
+        pin_memory=True
     )
 
     # Scheduler and math around the number of training steps.
