@@ -6,7 +6,9 @@ yes | conda activate fast_textual_inversion
 pip install -U -qq git+https://github.com/huggingface/diffusers.git
 pip install -qq accelerate transformers ftfy
 pip install -r requirements.txt
+pip install -U xformers
 accelerate config
+
 
 
 
