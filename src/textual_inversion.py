@@ -71,9 +71,11 @@ logger = get_logger(__name__)
 def save_progress(text_encoder, placeholder_token_id, accelerator, args, save_path, loss):
     logger.info(f"Saving embeddings to {save_path}")
     learned_embeds = accelerator.unwrap_model(text_encoder).get_input_embeddings().weight[placeholder_token_id]
-    learned_embeds_dict = {args.placeholder_token: learned_embeds.detach().cpu(),
+    learned_embeds = learned_embeds.detach().cpu()
+    learned_embeds_dict = {args.placeholder_token: learned_embeds,
                            'loss': loss.item()}
     torch.save(learned_embeds_dict, save_path)
+    return learned_embeds
 
 
 def parse_args():
@@ -647,11 +649,17 @@ def train_epoch(accelerator, args, cache_dir, epoch, lr_scheduler, noise_schedul
 
             loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
 
+            token_before_step = accelerator.unwrap_model(text_encoder).get_input_embeddings().weight[
+                placeholder_token_id]
             accelerator.backward(loss)
             # tokenizer.decode(batch['input_ids'].view(-1),skip_special_tokens=True)
             optimizer.step()
             lr_scheduler.step()
             optimizer.zero_grad()
+
+            token_after_step = accelerator.unwrap_model(text_encoder).get_input_embeddings().weight[
+                placeholder_token_id]
+            embedding_update_size = (token_after_step - token_before_step).norm(2).item()
 
             # Let's make sure we don't update any embedding weights besides the newly added token
             index_no_updates = torch.arange(len(tokenizer)) != placeholder_token_id
@@ -681,7 +689,8 @@ def train_epoch(accelerator, args, cache_dir, epoch, lr_scheduler, noise_schedul
                     args.validation_prompt = args.validation_prompt.strip() + ' ' + args.placeholder_token
                 do_validation(accelerator, args, cache_dir, epoch, text_encoder, unet, vae, tokenizer)
 
-        logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
+        logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0],
+                'embedding_update_size': embedding_update_size}
         progress_bar.set_postfix(**logs)
         accelerator.log(logs, step=global_step)
 
