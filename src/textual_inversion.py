@@ -71,7 +71,7 @@ logger = get_logger(__name__)
 def save_progress(text_encoder, placeholder_token_id, accelerator, args, save_path, loss):
     logger.info(f"Saving embeddings to {save_path}")
     learned_embeds = accelerator.unwrap_model(text_encoder).get_input_embeddings().weight[placeholder_token_id]
-    learned_embeds = learned_embeds.detach().cpu()
+    learned_embeds = learned_embeds.clone().detach().cpu()
     learned_embeds_dict = {args.placeholder_token: learned_embeds,
                            'loss': loss.item()}
     torch.save(learned_embeds_dict, save_path)
@@ -609,6 +609,9 @@ def train_epoch(accelerator, args, cache_dir, epoch, lr_scheduler, noise_schedul
                 train_dataloader, unet, vae, weight_dtype):
     global global_step
     global first_epoch
+    token_before_step = accelerator.unwrap_model(text_encoder).get_input_embeddings().weight[
+        placeholder_token_id].detach().cpu()
+
     text_encoder.train()
     for step, batch in enumerate(train_dataloader):
         # Skip steps until we reach the resumed step
@@ -649,17 +652,11 @@ def train_epoch(accelerator, args, cache_dir, epoch, lr_scheduler, noise_schedul
 
             loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
 
-            token_before_step = accelerator.unwrap_model(text_encoder).get_input_embeddings().weight[
-                placeholder_token_id]
             accelerator.backward(loss)
             # tokenizer.decode(batch['input_ids'].view(-1),skip_special_tokens=True)
             optimizer.step()
             lr_scheduler.step()
             optimizer.zero_grad()
-
-            token_after_step = accelerator.unwrap_model(text_encoder).get_input_embeddings().weight[
-                placeholder_token_id]
-            embedding_update_size = (token_after_step - token_before_step).norm(2).item()
 
             # Let's make sure we don't update any embedding weights besides the newly added token
             index_no_updates = torch.arange(len(tokenizer)) != placeholder_token_id
@@ -672,7 +669,9 @@ def train_epoch(accelerator, args, cache_dir, epoch, lr_scheduler, noise_schedul
         if accelerator.sync_gradients:
             if global_step % args.save_steps == 0:
                 save_path = os.path.join(args.output_dir, f"learned_embeds-steps-{global_step}.bin")
-                save_progress(text_encoder, placeholder_token_id, accelerator, args, save_path, loss)
+                token_after_step = save_progress(text_encoder, placeholder_token_id, accelerator, args, save_path, loss)
+                embedding_update_size = (token_after_step - token_before_step).norm(2).item()
+                token_before_step = token_after_step
 
             progress_bar.update(1)
             global_step += 1
