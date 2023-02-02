@@ -28,10 +28,11 @@ def get_partition_and_time_limit(partition=None):
     # if 'studentb' in os.popen('squeue | grep glickman').read():
 
     if num_jobs_in_student_batch >= num_jobs_that_can_run_on_studentbatch_at_one_time:
-        return 'studentkillable', 'infinite'
+        # return 'studentkillable', 'infinite'
+        return 'studentkillable', '3:00:00'
 
-    return 'studentbatch', 'infinite'
-    # return 'studentbatch', '7-00:00:00'
+    # return 'studentbatch', 'infinite'
+    return 'studentbatch', '3:00:00'
 
 
 def run_on_slurm(job_name, params, no_flag_param='', slurm=None, gpu=True, sleep=True, wandb=True):
