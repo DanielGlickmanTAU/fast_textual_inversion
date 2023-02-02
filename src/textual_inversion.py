@@ -68,12 +68,12 @@ check_min_version("0.13.0.dev0")
 logger = get_logger(__name__)
 
 
-def save_progress(text_encoder, placeholder_token_id, accelerator, args, save_path, loss):
+def save_progress(text_encoder, placeholder_token_id, accelerator, args, save_path, loss, distance_loss):
     logger.info(f"Saving embeddings to {save_path}")
     learned_embeds = accelerator.unwrap_model(text_encoder).get_input_embeddings().weight[placeholder_token_id]
     learned_embeds = learned_embeds.clone().detach().cpu()
     learned_embeds_dict = {args.placeholder_token: learned_embeds,
-                           'loss': loss.item()}
+                           'loss': loss.item(), 'distance_loss': distance_loss}
     torch.save(learned_embeds_dict, save_path)
     return learned_embeds
 
@@ -677,7 +677,8 @@ def train_epoch(accelerator, args, cache_dir, epoch, lr_scheduler, noise_schedul
         if accelerator.sync_gradients:
             if global_step % args.save_steps == 0:
                 save_path = os.path.join(args.output_dir, f"learned_embeds-steps-{global_step}.bin")
-                token_after_step = save_progress(text_encoder, placeholder_token_id, accelerator, args, save_path, loss)
+                token_after_step = save_progress(text_encoder, placeholder_token_id, accelerator, args, save_path, loss,
+                                                 distance_loss)
                 embedding_update_size = (token_after_step - token_before_step).norm(2).item()
                 token_before_step = token_after_step
 
