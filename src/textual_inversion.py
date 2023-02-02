@@ -317,6 +317,8 @@ def parse_args():
     parser.add_argument('--label_used', type=str, default='',
                         help="Label of the images in the datasets. used for analysis and debug")
 
+    parser.add_argument('--distance_loss_alpha', type=float, default=0.)
+
     args = parser.parse_args()
     env_local_rank = int(os.environ.get("LOCAL_RANK", -1))
     if env_local_rank != -1 and env_local_rank != args.local_rank:
@@ -575,7 +577,7 @@ def main():
     for epoch in range(first_epoch, args.num_train_epochs):
         loss = train_epoch(accelerator, args, cache_dir, epoch, lr_scheduler, noise_scheduler,
                            optimizer, orig_embeds_params, placeholder_token_id, progress_bar, resume_step, text_encoder,
-                           tokenizer, train_dataloader, unet, vae, weight_dtype)
+                           tokenizer, train_dataloader, unet, vae, weight_dtype, args.distance_loss_alpha)
 
     # Create the pipeline using using the trained modules and save it.
     accelerator.wait_for_everyone()
@@ -606,7 +608,7 @@ def main():
 
 def train_epoch(accelerator, args, cache_dir, epoch, lr_scheduler, noise_scheduler, optimizer,
                 orig_embeds_params, placeholder_token_id, progress_bar, resume_step, text_encoder, tokenizer,
-                train_dataloader, unet, vae, weight_dtype):
+                train_dataloader, unet, vae, weight_dtype, distance_loss_alpha=0.):
     global global_step
     global first_epoch
     embedding_update_size = 0.
@@ -653,6 +655,11 @@ def train_epoch(accelerator, args, cache_dir, epoch, lr_scheduler, noise_schedul
 
             loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
 
+            distance_loss = F.mse_loss(text_encoder.get_input_embeddings().weight[placeholder_token_id].float(),
+                                       orig_embeds_params[placeholder_token_id].float(), reduction='mean')
+
+            loss = (1 - distance_loss_alpha) * loss + distance_loss_alpha * distance_loss
+
             accelerator.backward(loss)
             # tokenizer.decode(batch['input_ids'].view(-1),skip_special_tokens=True)
             optimizer.step()
@@ -690,7 +697,7 @@ def train_epoch(accelerator, args, cache_dir, epoch, lr_scheduler, noise_schedul
                 do_validation(accelerator, args, cache_dir, epoch, text_encoder, unet, vae, tokenizer)
 
         logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0],
-                'embedding_update_size': embedding_update_size}
+                'embedding_update_size': embedding_update_size, 'distance_loss': distance_loss}
         progress_bar.set_postfix(**logs)
         accelerator.log(logs, step=global_step)
 
