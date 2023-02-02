@@ -609,6 +609,7 @@ def train_epoch(accelerator, args, cache_dir, epoch, lr_scheduler, noise_schedul
                 train_dataloader, unet, vae, weight_dtype):
     global global_step
     global first_epoch
+    embedding_update_size = 0.
     token_before_step = accelerator.unwrap_model(text_encoder).get_input_embeddings().weight[
         placeholder_token_id].detach().cpu()
 
