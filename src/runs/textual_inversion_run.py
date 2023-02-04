@@ -13,14 +13,17 @@ food_split = 'test'
 # quick = True
 # validation_epochs = 10
 quick = False
-validation_epochs = 500
-overall_runs = 2
+validation_epochs = 100
+overall_runs = 1
 params = {
+    '--enable_xformers_memory_efficient_attention': '',
     '--pretrained_model_name_or_path': 'runwayml/stable-diffusion-v1-5',
     '--placeholder_token': 'my_new_token',
     '--initializer_token': 'food',
     '--resolution': 512,
-    '--train_batch_size': 1,
+    # '--train_batch_size': 2???,
+    '--train_batch_size': 4,
+    '--distance_loss_alpha': 0.1,
     '--gradient_accumulation_steps': 4,
     '--max_train_steps': 3000,
     '--learning_rate': 5.0e-04,
@@ -48,9 +51,10 @@ for _ in range(overall_runs):
         k = random.randint(4, 8)
         p['--as_json'] = ''
         p['--num_images'] = k
-        p['--label_used'] = str(cls)
+        lbl = str(cls)
+        p['--label_used'] = lbl
         state = get_datasetstate_with_k_random_indices_with_label('food', label=cls, k=k, split=food_split, quick=quick)
-        train_output_dir = get_food_dir() + '/training_output/' + str(time.time())
+        train_output_dir = get_food_dir() + '/training_output/' + str(time.time()) + '_' + lbl
         p['--output_dir'] = train_output_dir
         os.makedirs(p['--output_dir'])
         dataset_state_json_ = p['--output_dir'] + '/dataset_state.json'
