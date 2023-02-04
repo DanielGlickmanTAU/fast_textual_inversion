@@ -696,9 +696,6 @@ def train_epoch(accelerator, args, cache_dir, epoch, lr_scheduler, noise_schedul
                     logger.info(f"Saved state to {save_path}")
 
             if args.validation_prompt is not None and global_step % args.validation_epochs == 0:
-                args.validation_prompt = args.validation_prompt.replace('{}', args.placeholder_token)
-                if args.placeholder_token not in args.validation_prompt:
-                    args.validation_prompt = args.validation_prompt.strip() + ' ' + args.placeholder_token
                 do_validation(accelerator, args, cache_dir, epoch, text_encoder, unet, vae, tokenizer)
 
         logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0],
@@ -712,6 +709,10 @@ def train_epoch(accelerator, args, cache_dir, epoch, lr_scheduler, noise_schedul
 
 
 def do_validation(accelerator, args, cache_dir, epoch, text_encoder, unet, vae, tokenizer):
+    args.validation_prompt = args.validation_prompt.replace('{}', args.placeholder_token)
+    if args.placeholder_token not in args.validation_prompt:
+        args.validation_prompt = args.validation_prompt.strip() + ' ' + args.placeholder_token
+
     logger.info(
         f"Running validation... \n Generating {args.num_validation_images} images with prompt:"
         f" {args.validation_prompt}."
