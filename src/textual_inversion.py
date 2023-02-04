@@ -68,12 +68,14 @@ check_min_version("0.13.0.dev0")
 logger = get_logger(__name__)
 
 
-def save_progress(text_encoder, placeholder_token_id, accelerator, args, save_path, loss, distance_loss):
+def save_progress(text_encoder, placeholder_token_id, accelerator, args, save_path, loss, distance_loss=None):
     logger.info(f"Saving embeddings to {save_path}")
     learned_embeds = accelerator.unwrap_model(text_encoder).get_input_embeddings().weight[placeholder_token_id]
     learned_embeds = learned_embeds.clone().detach().cpu()
     learned_embeds_dict = {args.placeholder_token: learned_embeds,
-                           'loss': loss.item(), 'distance_loss': distance_loss}
+                           'loss': loss.item()}
+    if distance_loss:
+        learned_embeds_dict['distance_loss'] = distance_loss
     torch.save(learned_embeds_dict, save_path)
     return learned_embeds
 
