@@ -577,9 +577,11 @@ def main():
     orig_embeds_params = accelerator.unwrap_model(text_encoder).get_input_embeddings().weight.data.clone()
 
     for epoch in range(first_epoch, args.num_train_epochs):
-        loss = train_epoch(accelerator, args, cache_dir, epoch, lr_scheduler, noise_scheduler,
-                           optimizer, orig_embeds_params, placeholder_token_id, progress_bar, resume_step, text_encoder,
-                           tokenizer, train_dataloader, unet, vae, weight_dtype, args.distance_loss_alpha)
+        loss, distance_loss = train_epoch(accelerator, args, cache_dir, epoch, lr_scheduler, noise_scheduler,
+                                          optimizer, orig_embeds_params, placeholder_token_id, progress_bar,
+                                          resume_step, text_encoder,
+                                          tokenizer, train_dataloader, unet, vae, weight_dtype,
+                                          args.distance_loss_alpha)
 
     # Create the pipeline using using the trained modules and save it.
     accelerator.wait_for_everyone()
@@ -600,7 +602,7 @@ def main():
         #     pipeline.save_pretrained(args.output_dir)
         # Save the newly trained embeddings
         save_path = os.path.join(args.output_dir, "learned_embeds.bin")
-        save_progress(text_encoder, placeholder_token_id, accelerator, args, save_path, loss)
+        save_progress(text_encoder, placeholder_token_id, accelerator, args, save_path, loss, distance_loss)
 
         if args.push_to_hub:
             repo.push_to_hub(commit_message="End of training", blocking=False, auto_lfs_prune=True)
@@ -706,7 +708,7 @@ def train_epoch(accelerator, args, cache_dir, epoch, lr_scheduler, noise_schedul
 
         if global_step >= args.max_train_steps:
             break
-    return loss
+    return loss, distance_loss
 
 
 def do_validation(accelerator, args, cache_dir, epoch, text_encoder, unet, vae, tokenizer):
