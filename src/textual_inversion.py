@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 import json
 
-from src.data import concepts_datasets
+from src.data import concepts_datasets, utils
 from src.data.textual_inversion_dataset import TextualInversionDataset
 from src.misc import compute
 import wandb
@@ -318,6 +318,9 @@ def parse_args():
     )
     parser.add_argument('--label_used', type=str, default='',
                         help="Label of the images in the datasets. used for analysis and debug")
+    parser.add_argument('--dataset', type=str, help='name of dataset')
+
+    parser.add_argument('--s3_upload', action='store_true')
 
     parser.add_argument('--distance_loss_alpha', type=float, default=0.)
 
@@ -608,6 +611,10 @@ def main():
             repo.push_to_hub(commit_message="End of training", blocking=False, auto_lfs_prune=True)
 
     accelerator.end_training()
+
+    if args.s3_upload:
+        _, zipname = os.path.split(args.output_dir)
+        utils.s3_upload(args.output_dir, zipname)
 
 
 def train_epoch(accelerator, args, cache_dir, epoch, lr_scheduler, noise_scheduler, optimizer,

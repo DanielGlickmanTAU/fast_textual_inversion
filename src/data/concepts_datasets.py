@@ -27,6 +27,10 @@ def get_food_dir():
     return f'{get_project_dir()}/food_data'
 
 
+def get_celeb_dir():
+    return f'{get_project_dir()}/celeba_hq_data'
+
+
 def get_food_ds(split='test'):
     return torchvision.datasets.Food101(root=get_food_dir(),
                                         download=True, split=split)  # ,transform=transforms.ToTensor())
