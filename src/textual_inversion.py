@@ -614,7 +614,7 @@ def main():
 
     if args.s3_upload:
         _, zipname = os.path.split(args.output_dir)
-        utils.s3_upload(args.output_dir, zipname)
+        utils.s3_upload(args.output_dir, zipname + '.zip')
 
 
 def train_epoch(accelerator, args, cache_dir, epoch, lr_scheduler, noise_scheduler, optimizer,
