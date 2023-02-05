@@ -736,6 +736,7 @@ def do_validation(accelerator, args, cache_dir, epoch, text_encoder, unet, vae, 
     pipeline.scheduler = DPMSolverMultistepScheduler.from_config(pipeline.scheduler.config)
     pipeline = pipeline.to(accelerator.device)
     pipeline.set_progress_bar_config(disable=True)
+    pipeline.safety_checker = None
     # run inference
     generator = (
         None if args.seed is None else torch.Generator(device=accelerator.device).manual_seed(args.seed)
