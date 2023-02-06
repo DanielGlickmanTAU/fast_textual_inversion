@@ -585,6 +585,8 @@ def main():
                                           resume_step, text_encoder,
                                           tokenizer, train_dataloader, unet, vae, weight_dtype,
                                           args.distance_loss_alpha)
+        if global_step > args.max_train_steps:
+            break
 
     # Create the pipeline using using the trained modules and save it.
     accelerator.wait_for_everyone()
@@ -710,8 +712,6 @@ def train_epoch(accelerator, args, cache_dir, epoch, lr_scheduler, noise_schedul
         progress_bar.set_postfix(**logs)
         accelerator.log(logs, step=global_step)
 
-        if global_step >= args.max_train_steps:
-            break
     return loss, distance_loss
 
 
