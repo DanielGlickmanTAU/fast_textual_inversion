@@ -605,6 +605,7 @@ def main():
         print(f'uploading to s3 {zipname}')
         utils.s3_upload(args.output_dir, zipname + '.zip')
         print('done uploading')
+    exit()
 
 
 def train_epoch(accelerator, args, cache_dir, epoch, lr_scheduler, noise_scheduler, optimizer,
