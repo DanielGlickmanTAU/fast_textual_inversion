@@ -72,8 +72,9 @@ def save_progress(text_encoder, placeholder_token_id, accelerator, args, save_pa
     logger.info(f"Saving embeddings to {save_path}")
     learned_embeds = accelerator.unwrap_model(text_encoder).get_input_embeddings().weight[placeholder_token_id]
     learned_embeds = learned_embeds.clone().detach().cpu()
-    learned_embeds_dict = {args.placeholder_token: learned_embeds,
-                           'loss': loss.item()}
+    learned_embeds_dict = {args.placeholder_token: learned_embeds}
+    if loss:
+        learned_embeds_dict['loss'] = loss
     if distance_loss:
         learned_embeds_dict['distance_loss'] = distance_loss
     torch.save(learned_embeds_dict, save_path)
@@ -146,6 +147,8 @@ def parse_args():
         help="The output directory where the model predictions and checkpoints will be written.",
     )
     parser.add_argument("--seed", type=int, default=None, help="A seed for reproducible training.")
+    parser.add_argument('--wandb_project', type=str, default='textual_inversion', help='wandb project name')
+
     parser.add_argument(
         "--resolution",
         type=int,
@@ -552,7 +555,7 @@ def main():
     # We need to initialize the trackers we use, and also store our configuration.
     # The trackers initializes automatically on the main process.
     if accelerator.is_main_process:
-        accelerator.init_trackers("textual_inversion", config=vars(args))
+        accelerator.init_trackers(args.wandb_project, config=vars(args))
 
     # Train!
     total_batch_size = args.train_batch_size * accelerator.num_processes * args.gradient_accumulation_steps
