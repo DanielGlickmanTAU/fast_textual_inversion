@@ -578,7 +578,9 @@ def main():
 
     # keep original embeddings as reference
     orig_embeds_params = accelerator.unwrap_model(text_encoder).get_input_embeddings().weight.data.clone()
-
+    save_path = os.path.join(args.output_dir, f"learned_embeds-steps-{global_step}.bin")
+    save_progress(text_encoder, placeholder_token_id, accelerator, args, save_path, 0,
+                  0)
     for epoch in range(first_epoch, args.num_train_epochs):
         loss, distance_loss = train_epoch(accelerator, args, cache_dir, epoch, lr_scheduler, noise_scheduler,
                                           optimizer, orig_embeds_params, placeholder_token_id, progress_bar,
@@ -675,6 +677,9 @@ def train_epoch(accelerator, args, cache_dir, epoch, lr_scheduler, noise_schedul
                     index_no_updates
                 ] = orig_embeds_params[index_no_updates]
 
+        progress_bar.update(1)
+        global_step += 1
+
         # Checks if the accelerator has performed an optimization step behind the scenes
         if accelerator.sync_gradients:
             if global_step % args.save_steps == 0:
@@ -683,9 +688,6 @@ def train_epoch(accelerator, args, cache_dir, epoch, lr_scheduler, noise_schedul
                                                  distance_loss)
                 embedding_update_size = (token_after_step - token_before_step).norm(2).item()
                 token_before_step = token_after_step
-
-            progress_bar.update(1)
-            global_step += 1
 
             if global_step % args.checkpointing_steps == 0:
                 if accelerator.is_main_process:
