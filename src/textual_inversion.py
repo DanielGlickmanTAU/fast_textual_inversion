@@ -495,7 +495,6 @@ def main():
     if args.as_json:
         state = json.load(open(args.train_data_dir, 'r'))
         images = concepts_datasets.get_images_from_dataset_state(state)
-        json.dump(args.__dict__, open(args.output_dir + '/args.json', 'w'))
     else:
         images = args.train_data_dir
 
@@ -567,6 +566,8 @@ def main():
     logger.info(f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}")
     logger.info(f"  Gradient Accumulation steps = {args.gradient_accumulation_steps}")
     logger.info(f"  Total optimization steps = {args.max_train_steps}")
+
+    json.dump(args.__dict__, open(args.output_dir + '/args.json', 'w'))
 
     global global_step
     global first_epoch
