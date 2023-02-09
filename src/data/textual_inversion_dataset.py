@@ -121,12 +121,13 @@ person_templates = [
     "a close-up photo of {}",
     "a cropped photo of {}",
     "a good photo of {}",
-    "a photograph of {}, elegant, highly detailed, centered"
-    "a good close-up picture of {}, highly detailed, centered"
-    "a close up photo of {}, highly quality, centered"
-    "a high quality photograph of {}"
-    "a head photo of {}, good lighting, centered"
+    "a photograph of {}, elegant, highly detailed, centered",
+    "a good close-up picture of {}, highly detailed, centered",
+    "a close up photo of {}, highly quality, centered",
+    "a high quality photograph of {}",
+    "a head photo of {}, good lighting, centered",
 ]
+
 
 class TextualInversionDataset(Dataset):
     def __init__(
