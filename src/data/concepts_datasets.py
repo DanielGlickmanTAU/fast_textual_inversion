@@ -34,7 +34,7 @@ def get_food_dir():
 
 
 def get_celeb_dir():
-    return f'{get_project_dir()}/celeba_hq_data'
+    return f'{get_project_dir()}/celebhq'
 
 
 def get_food_ds(split='test'):
@@ -43,7 +43,8 @@ def get_food_ds(split='test'):
 
 
 def get_celeba_ds():
-    return torchvision.datasets.CelebA(root=f'{get_project_dir()}/celeba_data', download=True)
+    return torchvision.datasets.CelebA(root=f'{get_project_dir()}/celeba_data', download=True, split='all',
+                                       target_type='identity')
 
 
 @dataclass
