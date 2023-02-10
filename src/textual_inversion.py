@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 import json
 
+from src import run_utils
 from src.data import concepts_datasets, utils
 from src.data.textual_inversion_dataset import TextualInversionDataset
 from src.misc import compute
@@ -324,6 +325,8 @@ def parse_args():
     parser.add_argument('--dataset', type=str, help='name of dataset')
 
     parser.add_argument('--s3_upload', action='store_true')
+    parser.add_argument('--start_runner', action='store_true')
+    parser.add_argument('--mark_done', type=str, default=None)
 
     parser.add_argument('--distance_loss_alpha', type=float, default=0.)
 
@@ -611,6 +614,11 @@ def main():
         print(f'uploading to s3 {zipname}')
         utils.s3_upload(args.output_dir, zipname + '.zip')
         print('done uploading')
+
+    if args.mark_done:
+        run_utils.mark_id_done(args.mark_done)
+    if args.start_runner:
+        run_utils.run_if_not_running()
     exit()
 
 
@@ -625,6 +633,9 @@ def train_epoch(accelerator, args, cache_dir, epoch, lr_scheduler, noise_schedul
 
     text_encoder.train()
     for step, batch in enumerate(train_dataloader):
+        if global_step > args.max_train_steps:
+            break
+
         # Skip steps until we reach the resumed step
         if args.resume_from_checkpoint and epoch == first_epoch and step < resume_step:
             if step % args.gradient_accumulation_steps == 0:
