@@ -40,8 +40,13 @@ def get_celeb_embedding_from_train_data_dir(train_data_dir):
         match = re.match(r'learned_embeds-steps-(\d+).bin', f)
         if match:
             number = match.group(1)
-            learned_embeds_files.append((os.path.join(train_data_dir, f), int(number)))
+            learned_embeds_files.append((os.path.join(embedding_dir, f), int(number)))
     return sorted(learned_embeds_files, key=lambda x: x[1])
+
+
+def embedding_bin_file_path_to_tensor(path):
+    ckpt = torch.load(path) if torch.cuda.is_available() else torch.load(path, map_location=torch.device('cpu'))
+    return ckpt['my_new_token']
 
 
 class ImagesEmbeddingDataset(Dataset):
@@ -49,6 +54,8 @@ class ImagesEmbeddingDataset(Dataset):
         self.flip_transform = transforms.RandomHorizontalFlip(p=flip_p)
         paths = get_celeb_dirs(train_data_parent_dir)
         images = [self.get_images(p, False) for p in paths]
+        embeddings = [get_celeb_embedding_from_train_data_dir(p) for p in paths]
+        # todo: some embeddings will be None until all jobs are finished
 
     @staticmethod
     def get_images(train_data_dir, as_json):
