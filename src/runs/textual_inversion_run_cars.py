@@ -8,17 +8,19 @@ from src.data.concepts_datasets import get_datasetstate_with_k_random_indices_wi
 from src.misc.gridsearch import gridsearch
 from src.misc.slurm import run_on_slurm
 
-dataset, num_classes, split = 'food', 101, 'test'
+# dataset, num_classes, split = 'food', 101, 'test'
 dataset, num_classes, split = 'cars', 196, 'train'
 
 validation_epochs = 50000000000000
 # validation_epochs = 50
 s3_upload = True
-overall_runs = 300
-max_train_steps = 400
+# s3_upload = False
+overall_runs = 100
+# max_train_steps = 3000
+max_train_steps = 800
 min_num_class = 3
 max_num_class = 8
-save_steps = 1
+save_steps = 10
 batch_size = 1
 params = {
     '--enable_xformers_memory_efficient_attention': '',
@@ -89,6 +91,6 @@ for _ in range(overall_runs):
         if dataset == 'celeba':
             p['--initializer_token'] = 'person'
 
-        id = run_on_slurm(job_name, params={}, no_flag_param=p, sleep=1, wandb=True, slurm_time_limit='0:16:00')
+        id = run_on_slurm(job_name, params={}, no_flag_param=p, sleep=1, wandb=True, slurm_time_limit='0:32:00')
         ids.append(id)
     print(f'submited {len(gridsearch(params, params_for_exp))} jobs')

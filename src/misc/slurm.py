@@ -9,7 +9,10 @@ python = os.sys.executable
 
 slurm_file = 'my_slurm.slurm'
 
-num_jobs_that_can_run_on_studentbatch_at_one_time = 6
+num_jobs_that_can_run_on_studentbatch_at_one_time = 10
+
+
+# num_jobs_that_can_run_on_studentbatch_at_one_time = 40
 
 
 # num_jobs_that_can_run_on_studentbatch_at_one_time = 0
@@ -29,25 +32,30 @@ def get_partition_and_time_limit(partition=None):
 
     if num_jobs_in_student_batch >= num_jobs_that_can_run_on_studentbatch_at_one_time:
         # return 'studentkillable', 'infinite'
-        return 'studentkillable', '3:00:00'
+        return 'studentkillable', '3:35:00'
 
     # return 'studentbatch', 'infinite'
-    return 'studentbatch', '3:00:00'
+    return 'studentbatch', '3:35:00'
 
 
-def run_on_slurm(job_name, params, no_flag_param='', slurm=None, gpu=True, sleep=True, wandb=True):
+def run_on_slurm(job_name, params, no_flag_param='', slurm=None, gpu=True, sleep=True, wandb=True, slurm_partition=None,
+                 slurm_time_limit=None):
     if slurm is None:
         slurm = len(os.popen('which squeue').read()) > 1
     if 'sulim' in os.popen('whoami').read():
         job_name = job_name.replace('main', 'ssr')
     partition, time_limit = get_partition_and_time_limit()
+    if slurm_partition:
+        partition = slurm_partition
+    if slurm_time_limit:
+        time_limit = slurm_time_limit
     python_file = job_name
     python_file = python_file.replace('.py', '')
     job_name = job_name + str(time.time())
     # need to for gps main stuff
     if isinstance(no_flag_param, dict):
-        if wandb and 'wandb.project' not in no_flag_param:
-            no_flag_param['wandb.project'] = os.path.basename(sys.argv[0]).replace('.py', '') \
+        if wandb and 'wandb_project' not in no_flag_param:
+            no_flag_param['--wandb_project'] = os.path.basename(sys.argv[0]).replace('.py', '') \
                 .replace('_slurm', '').replace('slurm_', '').replace('slurm', '')
         no_flag_param = ' '.join([f'{key} {value}' for key, value in no_flag_param.items()])
     command = f'{python} {python_file}.py ' + ' '.join(
@@ -59,7 +67,7 @@ def run_on_slurm(job_name, params, no_flag_param='', slurm=None, gpu=True, sleep
 #SBATCH --output={job_name}.out
 #SBATCH --error={job_name}.err
 #SBATCH -p {partition}
-## SBATCH --time={time_limit}
+#SBATCH --time={time_limit}
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gpus={'1' if gpu else '0'}
@@ -67,7 +75,7 @@ def run_on_slurm(job_name, params, no_flag_param='', slurm=None, gpu=True, sleep
         with open(slurm_file, 'w') as f:
             f.write(slurm_script)
 
-        job_id = os.popen(f'sbatch {slurm_file}').read()[-6:].strip()
+        job_id = os.popen(f'sbatch {slurm_file}').read()[-7:].strip()
         print(f'executing {job_name} with job id {job_id}')
         open(f'./slurm_id_{job_id}_outfile_{job_name}', 'w').write(slurm_script)
 

@@ -13,7 +13,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 import json
+import sys
+import os
 
+sys.path.append(os.path.abspath('..'))
 from src import run_utils
 from src.data import concepts_datasets, utils
 from src.data.textual_inversion_dataset import TextualInversionDataset
@@ -609,16 +612,17 @@ def main():
 
     accelerator.end_training()
 
+    if args.mark_done:
+        run_utils.mark_id_done(args.mark_done)
+    if args.start_runner:
+        run_utils.run_if_not_running()
+
     if args.s3_upload:
         _, zipname = os.path.split(args.output_dir)
         print(f'uploading to s3 {zipname}')
         utils.s3_upload(args.output_dir, zipname + '.zip')
         print('done uploading')
 
-    if args.mark_done:
-        run_utils.mark_id_done(args.mark_done)
-    if args.start_runner:
-        run_utils.run_if_not_running()
     exit()
 
 
