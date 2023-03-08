@@ -612,16 +612,16 @@ def main():
 
     accelerator.end_training()
 
-    if args.mark_done:
-        run_utils.mark_id_done(args.mark_done)
-    if args.start_runner:
-        run_utils.run_if_not_running()
-
     if args.s3_upload:
         _, zipname = os.path.split(args.output_dir)
         print(f'uploading to s3 {zipname}')
         utils.s3_upload(args.output_dir, zipname + '.zip')
         print('done uploading')
+
+    if args.mark_done:
+        run_utils.mark_id_done(args.mark_done)
+    if args.start_runner:
+        run_utils.run_if_not_running()
 
     exit()
 

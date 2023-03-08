@@ -9,7 +9,7 @@ sys.path.append(os.path.abspath('../..'))
 
 from src import run_utils
 from src.data.concepts_datasets import get_datasetstate_with_k_random_indices_with_label, get_project_dir, get_food_dir, \
-    get_celeb_dir, get_cars_dir
+    get_celeb_dir, get_cars_dir, get_celeb_short_dir
 from src.misc.gridsearch import gridsearch
 from src.misc.slurm import run_on_slurm
 
@@ -72,10 +72,6 @@ def get_partition():
     return None
 
 
-celeb_ids = [int(x) for x in os.listdir(get_celeb_dir())]
-random.shuffle(celeb_ids)
-
-
 def get_partition_non_none_blocking():
     global partition
     partition = None
@@ -85,6 +81,38 @@ def get_partition_non_none_blocking():
             time.sleep(60)
     return partition
 
+
+celeb_ids = [int(x) for x in os.listdir(get_celeb_dir())]
+random.shuffle(celeb_ids)
+
+for celeb_id in celeb_ids:
+    if run_utils.is_id_done(celeb_id):
+        continue
+
+    p = gridsearch(params, params_for_exp)[0]
+    if s3_upload:
+        p['--s3_upload'] = ''
+    if start_runner:
+        p['--start_runner'] = ''
+    partition = get_partition_non_none_blocking()
+
+    time_signature = str(time.time())
+    p['--mark_done'] = str(celeb_id)
+    train_dir = get_celeb_dir() + '/' + str(celeb_id)
+    p['--train_data_dir'] = train_dir
+    train_output_dir = train_dir + '/training_output/' + dataset + '_' + time_signature
+    p['--output_dir'] = train_output_dir
+    os.makedirs(p['--output_dir'])
+
+    p['--initializer_token'] = 'person'
+
+    id = run_on_slurm(job_name, params={}, no_flag_param=p, sleep=60, wandb=True, slurm_time_limit='2:00:00',
+                      slurm_partition=partition)
+    ids.append(id)
+    print(f'submited {len(gridsearch(params, params_for_exp))} jobs')
+
+celeb_ids = [int(x) for x in os.listdir(get_celeb_short_dir())]
+random.shuffle(celeb_ids)
 
 for celeb_id in celeb_ids:
     if run_utils.is_id_done(celeb_id):
