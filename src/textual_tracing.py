@@ -97,6 +97,8 @@ def parse_args():
             raise argparse.ArgumentTypeError('Boolean value expected.')
 
     parser = argparse.ArgumentParser(description="Simple example of a training script.")
+    parser.add_argument('--mode', type=str, default='cross')
+
     parser.add_argument(
         "--save_steps",
         type=int,
@@ -422,40 +424,20 @@ def main():
                                                   subfolder="tokenizer")
 
     # Load scheduler and models
-    noise_scheduler = DDPMScheduler.from_pretrained(args.pretrained_model_name_or_path, cache_dir=cache_dir,
-                                                    subfolder="scheduler")
+    # noise_scheduler = DDPMScheduler.from_pretrained(args.pretrained_model_name_or_path, cache_dir=cache_dir,
+    #                                                 subfolder="scheduler")
     text_encoder = CLIPTextModel.from_pretrained(
-        args.pretrained_model_name_or_path, cache_dir=cache_dir, subfolder="text_encoder", revision=args.revision
+        args.pretrained_model_name_or_path, cache_dir=cache_dir, subfolder="text_encoder", revision=args.revision,
+        # tokenizer=tokenizer
     )
+
     vae = AutoencoderKL.from_pretrained(args.pretrained_model_name_or_path, cache_dir=cache_dir, subfolder="vae",
                                         revision=args.revision)
+    # save some memory..
+    vae.encoder = None
     unet = UNet2DConditionModel.from_pretrained(
         args.pretrained_model_name_or_path, cache_dir=cache_dir, subfolder="unet", revision=args.revision
     )
-
-    # Add the placeholder token in tokenizer
-    num_added_tokens = tokenizer.add_tokens(args.placeholder_token)
-    if num_added_tokens == 0:
-        raise ValueError(
-            f"The tokenizer already contains the token {args.placeholder_token}. Please pass a different"
-            " `placeholder_token` that is not already in the tokenizer."
-        )
-
-    # Convert the initializer_token, placeholder_token to ids
-    token_ids = tokenizer.encode(args.initializer_token, add_special_tokens=False)
-    # Check if initializer_token is a single token or a sequence of tokens
-    if len(token_ids) > 1:
-        raise ValueError("The initializer token must be a single token.")
-
-    initializer_token_id = token_ids[0]
-    placeholder_token_id = tokenizer.convert_tokens_to_ids(args.placeholder_token)
-
-    # Resize the token embeddings as we are adding new special tokens to the tokenizer
-    text_encoder.resize_token_embeddings(len(tokenizer))
-
-    # Initialise the newly added placeholder token with the embeddings of the initializer token
-    token_embeds = text_encoder.get_input_embeddings().weight.data
-    token_embeds[placeholder_token_id] = token_embeds[initializer_token_id]
 
     # Freeze vae and unet
     vae.requires_grad_(False)
@@ -488,54 +470,36 @@ def main():
                 args.learning_rate * args.gradient_accumulation_steps * args.train_batch_size * accelerator.num_processes
         )
 
-    # Initialize the optimizer
-    optimizer = torch.optim.AdamW(
-        text_encoder.get_input_embeddings().parameters(),  # only optimize the embeddings
-        lr=args.learning_rate,
-        betas=(args.adam_beta1, args.adam_beta2),
-        weight_decay=args.adam_weight_decay,
-        eps=args.adam_epsilon,
-    )
-
-    # Dataset and DataLoaders creation:
-    if args.as_json:
-        state = json.load(open(args.train_data_dir, 'r'))
-        images = concepts_datasets.get_images_from_dataset_state(state)
-    else:
-        images = args.train_data_dir
-
-    train_dataset = TextualInversionDataset(
-        data_root=images,
-        tokenizer=tokenizer,
-        size=args.resolution,
-        placeholder_token=args.placeholder_token,
-        repeats=args.repeats,
-        learnable_property=args.learnable_property,
-        center_crop=args.center_crop,
-        set="train",
-    )
-    train_dataloader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=args.train_batch_size, shuffle=True, num_workers=args.dataloader_num_workers,
-        pin_memory=True
-    )
+    # train_dataset = TextualInversionDataset(
+    #     data_root=images,
+    #     tokenizer=tokenizer,
+    #     size=args.resolution,
+    #     placeholder_token=args.placeholder_token,
+    #     repeats=args.repeats,
+    #     learnable_property=args.learnable_property,
+    #     center_crop=args.center_crop,
+    #     set="train",
+    # )
+    # train_dataloader = torch.utils.data.DataLoader(
+    #     train_dataset, batch_size=args.train_batch_size, shuffle=True, num_workers=args.dataloader_num_workers,
+    #     pin_memory=True
+    # )
 
     # Scheduler and math around the number of training steps.
     overrode_max_train_steps = False
-    num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
-    if args.max_train_steps is None:
-        args.max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
-        overrode_max_train_steps = True
-
-    lr_scheduler = get_scheduler(
-        args.lr_scheduler,
-        optimizer=optimizer,
-        num_warmup_steps=args.lr_warmup_steps * args.gradient_accumulation_steps,
-        num_training_steps=args.max_train_steps * args.gradient_accumulation_steps,
-    )
+    # num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
+    # if args.max_train_steps is None:
+    #     # args.max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
+    #     overrode_max_train_steps = True
 
     # Prepare everything with our `accelerator`.
-    text_encoder, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
-        text_encoder, optimizer, train_dataloader, lr_scheduler
+
+    # text_encoder, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
+    #     text_encoder, optimizer, train_dataloader, lr_scheduler
+    # )
+
+    text_encoder = accelerator.prepare(
+        text_encoder
     )
 
     # For mixed precision training we cast the unet and vae weights to half-precision
@@ -551,11 +515,6 @@ def main():
     vae.to(accelerator.device, dtype=weight_dtype)
 
     # We need to recalculate our total training steps as the size of the training dataloader may have changed.
-    num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
-    if overrode_max_train_steps:
-        args.max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
-    # Afterwards we recalculate our number of training epochs
-    args.num_train_epochs = math.ceil(args.max_train_steps / num_update_steps_per_epoch)
 
     # We need to initialize the trackers we use, and also store our configuration.
     # The trackers initializes automatically on the main process.
@@ -566,14 +525,11 @@ def main():
     total_batch_size = args.train_batch_size * accelerator.num_processes * args.gradient_accumulation_steps
 
     logger.info("***** Running training *****")
-    logger.info(f"  Num examples = {len(train_dataset)}")
     logger.info(f"  Num Epochs = {args.num_train_epochs}")
     logger.info(f"  Instantaneous batch size per device = {args.train_batch_size}")
     logger.info(f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}")
     logger.info(f"  Gradient Accumulation steps = {args.gradient_accumulation_steps}")
     logger.info(f"  Total optimization steps = {args.max_train_steps}")
-
-    json.dump(args.__dict__, open(args.output_dir + '/args.json', 'w'))
 
     global global_step
     global first_epoch
@@ -586,14 +542,13 @@ def main():
     progress_bar = tqdm(range(global_step, args.max_train_steps), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Steps")
 
-    do_validation(accelerator, args, cache_dir, text_encoder, unet, vae, tokenizer)
+    do_validation(accelerator, args, cache_dir, text_encoder, unet, vae, tokenizer, times_gen=200)
 
     # Create the pipeline using using the trained modules and save it.
     accelerator.wait_for_everyone()
     if accelerator.is_main_process:
         # Save the newly trained embeddings
         save_path = os.path.join(args.output_dir, "learned_embeds.bin")
-        save_progress(text_encoder, placeholder_token_id, accelerator, args, save_path, loss, distance_loss)
 
         if args.push_to_hub:
             repo.push_to_hub(commit_message="End of training", blocking=False, auto_lfs_prune=True)
@@ -614,122 +569,34 @@ def main():
     exit()
 
 
-def train_epoch(accelerator, args, cache_dir, epoch, lr_scheduler, noise_scheduler, optimizer,
-                orig_embeds_params, placeholder_token_id, progress_bar, resume_step, text_encoder, tokenizer,
-                train_dataloader, unet, vae, weight_dtype, distance_loss_alpha=0.):
-    global global_step
-    global first_epoch
-    embedding_update_size = 0.
-    token_before_step = accelerator.unwrap_model(text_encoder).get_input_embeddings().weight[
-        placeholder_token_id].detach().cpu()
-
-    text_encoder.train()
-    for step, batch in enumerate(train_dataloader):
-        if global_step > args.max_train_steps:
-            break
-
-        # Skip steps until we reach the resumed step
-        if args.resume_from_checkpoint and epoch == first_epoch and step < resume_step:
-            if step % args.gradient_accumulation_steps == 0:
-                progress_bar.update(1)
-            continue
-
-        with accelerator.accumulate(text_encoder):
-            # Convert images to latent space
-            latents = vae.encode(batch["pixel_values"].to(dtype=weight_dtype)).latent_dist.sample().detach()
-            latents = latents * vae.config.scaling_factor
-
-            # Sample noise that we'll add to the latents
-            noise = torch.randn_like(latents)
-            bsz = latents.shape[0]
-            # Sample a random timestep for each image
-            timesteps = torch.randint(0, noise_scheduler.config.num_train_timesteps, (bsz,), device=latents.device)
-            timesteps = timesteps.long()
-
-            # Add noise to the latents according to the noise magnitude at each timestep
-            # (this is the forward diffusion process)
-            noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
-
-            # Get the text embedding for conditioning
-            encoder_hidden_states = text_encoder(batch["input_ids"])[0].to(dtype=weight_dtype)
-
-            # Predict the noise residual
-            model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
-
-            # Get the target for loss depending on the prediction type
-            if noise_scheduler.config.prediction_type == "epsilon":
-                target = noise
-            elif noise_scheduler.config.prediction_type == "v_prediction":
-                target = noise_scheduler.get_velocity(latents, noise, timesteps)
-            else:
-                raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
-
-            loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
-
-            distance_loss = F.mse_loss(text_encoder.get_input_embeddings().weight[placeholder_token_id].float(),
-                                       orig_embeds_params[placeholder_token_id].float(), reduction='mean')
-
-            loss = (1 - distance_loss_alpha) * loss + distance_loss_alpha * distance_loss
-
-            accelerator.backward(loss)
-            # tokenizer.decode(batch['input_ids'].view(-1),skip_special_tokens=True)
-            optimizer.step()
-            lr_scheduler.step()
-            optimizer.zero_grad()
-
-            # Let's make sure we don't update any embedding weights besides the newly added token
-            index_no_updates = torch.arange(len(tokenizer)) != placeholder_token_id
-            with torch.no_grad():
-                accelerator.unwrap_model(text_encoder).get_input_embeddings().weight[
-                    index_no_updates
-                ] = orig_embeds_params[index_no_updates]
-
-        progress_bar.update(1)
-        global_step += 1
-
-        # Checks if the accelerator has performed an optimization step behind the scenes
-        if accelerator.sync_gradients:
-            if global_step % args.save_steps == 0:
-                save_path = os.path.join(args.output_dir, f"learned_embeds-steps-{global_step}.bin")
-                token_after_step = save_progress(text_encoder, placeholder_token_id, accelerator, args, save_path, loss,
-                                                 distance_loss)
-                embedding_update_size = (token_after_step - token_before_step).norm(2).item()
-                token_before_step = token_after_step
-
-            if global_step % args.checkpointing_steps == 0:
-                if accelerator.is_main_process:
-                    save_path = os.path.join(args.output_dir, f"checkpoint-{global_step}")
-                    accelerator.save_state(save_path)
-                    logger.info(f"Saved state to {save_path}")
-
-            if args.validation_prompt is not None and global_step % args.validation_epochs == 0:
-                do_validation(accelerator, args, cache_dir, text_encoder, unet, vae, tokenizer)
-
-        logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0],
-                'embedding_update_size': embedding_update_size, 'distance_loss': distance_loss}
-        progress_bar.set_postfix(**logs)
-        accelerator.log(logs, step=global_step)
-
-    return loss, distance_loss
-
-
+# class TracingTextEncoder(CLIPTextModel):
 class TracingTextEncoder(torch.nn.Module):
-    def __init__(self, text_encoder, tokenizer):
+    def __init__(self, text_encoder, tokenizer, mode='cross'):
         super().__init__()
+        self.mode = mode
         self.tokenizer = tokenizer
         self.text_encoder = text_encoder
+        try:
+            # need this for stable diffusion flow
+            self.config = text_encoder.config
+            self.dtype = text_encoder.dtype
+            self.device = text_encoder.device
+        except:
+            pass
 
     def find_str_indicies_in_input_ids(self, input_ids, str):
         list_to_remove = self.tokenizer(str, add_special_tokens=False, return_tensors="pt")['input_ids']
+        list_to_remove = list_to_remove.to(input_ids.device)
         # Find the starting index of the sublist to remove
-        list_to_remove = list_to_remove.squeeze()
+        if list_to_remove.shape[-1] > 1:
+            list_to_remove = list_to_remove.squeeze()
         input_ids = input_ids.squeeze()
         start_index = (input_ids == list_to_remove[0]).nonzero(as_tuple=False)
 
         # Check if the sublist matches the list_to_remove
         for start in start_index:
             end_index = start + len(list_to_remove)
-            if (input_ids[start: end_index].tolist() == list_to_remove.tolist()):
+            if (input_ids[start: end_index].tolist() == list_to_remove.tolist()) or len(list_to_remove) == 1:
                 return start, end_index
         raise ValueError('str not found')
 
@@ -741,14 +608,64 @@ class TracingTextEncoder(torch.nn.Module):
         start_index, end_index = self.find_str_indicies_in_input_ids(input_ids, str)
         return self.remove_sublist(input_ids, start_index, end_index)
 
+    def get_ids_to_merge_back(self, left_ids, right_ids):
+        return torch.cat((left_ids != self.tokenizer.eos_token_id, right_ids != self.tokenizer.bos_token_id))
+
+    def get_non_eos_ids(self, left_ids, right_ids):
+        right_real_tokes = torch.logical_and(self.tokenizer.eos_token_id != right_ids,
+                                             self.tokenizer.bos_token_id != right_ids)
+        return torch.cat((left_ids != self.tokenizer.eos_token_id, right_real_tokes))
+
     def forward(self, input_ids, attention_mask):
-        self.find_str_indicies_in_input_ids(input_ids, 'and a men in a blue shirt')
-        out = self.text_encoder(input_ids, attention_mask=attention_mask, )
-        return out
+        if not self.mode or self.mode == 'None':
+            return self.text_encoder(input_ids, attention_mask)
+
+        # just case, all ids are eos
+        if (input_ids == self.tokenizer.eos_token_id).float().mean() > 0.9:
+            # return [self.text_encoder(input_ids[:, :1], attention_mask)[0].repeat((1, self.num_embeddings, 1))]
+            return self.text_encoder(input_ids, attention_mask=attention_mask)
+
+        if self.mode == 'cross':
+            left_ids = self.remove_str(input_ids.squeeze(0), 'and a man in a blue shirt')
+            right_ids = self.remove_str(input_ids.squeeze(0), 'a woman in a red shirt')
+            non_eos_ids = self.get_non_eos_ids(left_ids, right_ids)
+
+            out_left = self.text_encoder(left_ids.unsqueeze(0), attention_mask=attention_mask, )[0]
+            out_right = self.text_encoder(right_ids.unsqueeze(0), attention_mask=attention_mask, )[0]
+
+            out = torch.cat((out_left.squeeze(), out_right.squeeze()))
+
+            eos_left = out_left[:, (self.tokenizer.eos_token_id == left_ids)]
+            eos_right = out_right[:, (self.tokenizer.eos_token_id == right_ids)]
+            all_eos = torch.cat((eos_left, eos_right), dim=1).squeeze(0)
+            all_eos_shuffled = all_eos[torch.randperm(all_eos.shape[0])]
+
+            out_start = out[non_eos_ids]
+            eos_padding = all_eos_shuffled[:77 - len(out_start)]
+            out = torch.cat((out_start, eos_padding))
+
+            # merge_back_mask = self.get_ids_to_merge_back(left_ids, right_ids)
+            # out = out[merge_back_mask]
+            self.num_embeddings = out.shape[0]
+
+        if self.mode == 'causal':
+            out = self.text_encoder(input_ids, attention_mask=attention_mask)[0]
+
+            input_ids = input_ids.squeeze(0)
+            start_remove1, end_remove1 = self.find_str_indicies_in_input_ids(input_ids, 'a woman in a red shirt and')
+            ids_tmp = self.remove_str(input_ids, 'a woman in a red shirt and')
+            start_remove2, end_remove2 = self.find_str_indicies_in_input_ids(ids_tmp, 'blue')
+            # ids = self.remove_str(ids, 'blue')
+            # no not good... I need to get indicies. then encode. then remove
+            out = self.remove_sublist(out, start_remove1, end_remove1)
+            out = self.remove_sublist(out, start_remove2, end_remove2)
+            return [out]
+
+        return [out.unsqueeze(0)]
 
 
-def do_validation(accelerator, args, cache_dir, text_encoder, unet, vae, tokenizer):
-    args.validation_prompt = "A woman in a red shirt and a men in a blue shirt"
+def do_validation(accelerator, args, cache_dir, text_encoder, unet, vae, tokenizer, times_gen=1):
+    args.validation_prompt = "a woman in a red shirt and a man in a blue shirt"
 
     logger.info(
         f"Running validation... \n Generating {args.num_validation_images} images with prompt:"
@@ -772,20 +689,23 @@ def do_validation(accelerator, args, cache_dir, text_encoder, unet, vae, tokeniz
         None if args.seed is None else torch.Generator(device=accelerator.device).manual_seed(args.seed)
     )
     prompt = args.num_validation_images * [args.validation_prompt]
-    images = pipeline(prompt, num_inference_steps=25, generator=generator).images
-    for tracker in accelerator.trackers:
-        # if tracker.name == "tensorboard":
-        #     np_images = np.stack([np.asarray(img) for img in images])
-        #     tracker.writer.add_images("validation", np_images, epoch, dataformats="NHWC")
-        if tracker.name == "wandb":
-            tracker.log(
-                {
-                    "validation": [
-                        wandb.Image(image, caption=f"{i}: {args.validation_prompt}")
-                        for i, image in enumerate(images)
-                    ]
-                }
-            )
+    mode = args.mode
+    pipeline.text_encoder = TracingTextEncoder(pipeline.text_encoder, tokenizer, mode)
+    for _ in range(times_gen):
+        images = pipeline(prompt, num_inference_steps=25, generator=generator).images
+        for tracker in accelerator.trackers:
+            # if tracker.name == "tensorboard":
+            #     np_images = np.stack([np.asarray(img) for img in images])
+            #     tracker.writer.add_images("validation", np_images, epoch, dataformats="NHWC")
+            if tracker.name == "wandb":
+                tracker.log(
+                    {
+                        "validation": [
+                            wandb.Image(image, caption=f"{i}: ")
+                            for i, image in enumerate(images)
+                        ]
+                    }
+                )
     del pipeline
     torch.cuda.empty_cache()
 
