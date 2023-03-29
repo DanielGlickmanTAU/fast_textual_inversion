@@ -41,7 +41,7 @@ from accelerate.logging import get_logger
 from accelerate.utils import set_seed
 from diffusers import (
     AutoencoderKL,
-    DPMSolverMultistepScheduler,
+    DPMSolverMultistepScheduler, UNet2DConditionModel,
 )
 from diffusers.utils import check_min_version, is_wandb_available
 from diffusers.utils.import_utils import is_xformers_available
@@ -423,10 +423,7 @@ def main():
                                         revision=args.revision)
     # save some memory..
     vae.encoder = None
-    # unet = UNet2DConditionModel.from_pretrained(
-    #     args.pretrained_model_name_or_path, cache_dir=cache_dir, subfolder="unet", revision=args.revision
-    # )
-    unet = UnetCrossAttentionWrapper.from_pretrained(
+    unet = UNet2DConditionModel.from_pretrained(
         args.pretrained_model_name_or_path, cache_dir=cache_dir, subfolder="unet", revision=args.revision
     )
 
@@ -558,8 +555,6 @@ def main():
         print('done uploading')
 
     exit()
-
-
 
 
 def do_validation(accelerator, args, cache_dir, text_encoder, unet, vae, tokenizer, times_gen=1):
