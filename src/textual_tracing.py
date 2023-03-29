@@ -12,56 +12,42 @@
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
-import json
 import sys
 import os
 
 from src.CustomDiffusionPipeline import CustomDiffusionPipeline
+from src.UnetCrossAttentionWrapper import UnetCrossAttentionWrapper
+from src.tracing_text_encoder import TracingTextEncoder
 
 sys.path.append(os.path.abspath('..'))
 from src import run_utils
-from src.data import concepts_datasets, utils
-from src.data.textual_inversion_dataset import TextualInversionDataset
+from src.data import utils
 from src.misc import compute
 import wandb
 import argparse
 import logging
-import math
 import os
-import random
 from pathlib import Path
 from typing import Optional
 
-import numpy as np
 import torch
-import torch.nn.functional as F
 import torch.utils.checkpoint
-from torch.utils.data import Dataset
 
 import datasets
 import diffusers
-import PIL
 import transformers
 from accelerate import Accelerator
 from accelerate.logging import get_logger
 from accelerate.utils import set_seed
 from diffusers import (
     AutoencoderKL,
-    DDPMScheduler,
-    DiffusionPipeline,
     DPMSolverMultistepScheduler,
-    StableDiffusionPipeline,
-    UNet2DConditionModel,
 )
-from diffusers.optimization import get_scheduler
 from diffusers.utils import check_min_version, is_wandb_available
 from diffusers.utils.import_utils import is_xformers_available
 from huggingface_hub import HfFolder, Repository, create_repo, whoami
 
 # TODO: remove and import from diffusers.utils when the new version of diffusers is released
-from packaging import version
-from PIL import Image
-from torchvision import transforms
 from tqdm.auto import tqdm
 from transformers import CLIPTextModel, CLIPTokenizer
 
@@ -141,18 +127,13 @@ def parse_args():
         default=None,
         help="Pretrained tokenizer name or path if not the same as model_name",
     )
-    parser.add_argument(
-        "--train_data_dir", type=str, default=None, required=True, help="A folder containing the training data."
-    )
+
     parser.add_argument(
         "--placeholder_token",
         type=str,
         default=None,
         required=True,
         help="A token to use as a placeholder for the concept.",
-    )
-    parser.add_argument(
-        "--initializer_token", type=str, default=None, required=True, help="A token to use as initializer word."
     )
     parser.add_argument("--learnable_property", type=str, default="object", help="Choose between 'object' and 'style'")
     parser.add_argument("--repeats", type=int, default=100, help="How many times to repeat the training data.")
@@ -350,9 +331,6 @@ def parse_args():
     if env_local_rank != -1 and env_local_rank != args.local_rank:
         args.local_rank = env_local_rank
 
-    if args.train_data_dir is None:
-        raise ValueError("You must specify a train data directory.")
-
     return args
 
 
@@ -445,7 +423,10 @@ def main():
                                         revision=args.revision)
     # save some memory..
     vae.encoder = None
-    unet = UNet2DConditionModel.from_pretrained(
+    # unet = UNet2DConditionModel.from_pretrained(
+    #     args.pretrained_model_name_or_path, cache_dir=cache_dir, subfolder="unet", revision=args.revision
+    # )
+    unet = UnetCrossAttentionWrapper.from_pretrained(
         args.pretrained_model_name_or_path, cache_dir=cache_dir, subfolder="unet", revision=args.revision
     )
 
@@ -528,7 +509,7 @@ def main():
 
     # We need to initialize the trackers we use, and also store our configuration.
     # The trackers initializes automatically on the main process.
-    if accelerator.is_main_process:
+    if accelerator.is_main_process and 'wandb' in args.report_to:
         accelerator.init_trackers(args.wandb_project, config=vars(args))
 
     # Train!
@@ -579,112 +560,12 @@ def main():
     exit()
 
 
-# class TracingTextEncoder(CLIPTextModel):
-class TracingTextEncoder(torch.nn.Module):
-    def __init__(self, text_encoder, tokenizer, mode='cross', left_side=None, right_side=None):
-        super().__init__()
-        self.right_side = right_side
-        self.left_side = left_side
-        self.mode = mode
-        self.tokenizer = tokenizer
-        self.text_encoder = text_encoder
-        try:
-            # need this for stable diffusion flow
-            self.config = text_encoder.config
-            self.dtype = text_encoder.dtype
-            self.device = text_encoder.device
-        except:
-            pass
-
-    def find_str_indicies_in_input_ids(self, input_ids, str):
-        list_to_remove = self.tokenizer(str, add_special_tokens=False, return_tensors="pt")['input_ids']
-        list_to_remove = list_to_remove.to(input_ids.device)
-        # Find the starting index of the sublist to remove
-        if list_to_remove.shape[-1] > 1:
-            list_to_remove = list_to_remove.squeeze()
-        input_ids = input_ids.squeeze()
-        start_index = (input_ids == list_to_remove[0]).nonzero(as_tuple=False)
-
-        # Check if the sublist matches the list_to_remove
-        for start in start_index:
-            end_index = start + len(list_to_remove)
-            if (input_ids[start: end_index].tolist() == list_to_remove.tolist()) or len(list_to_remove) == 1:
-                return start, end_index
-        raise ValueError('str not found')
-
-    def remove_sublist(self, input_ids, start_index, end_index):
-        input_ids = torch.cat([input_ids[:start_index], input_ids[end_index:]])
-        return input_ids
-
-    def remove_str(self, input_ids, str):
-        start_index, end_index = self.find_str_indicies_in_input_ids(input_ids, str)
-        return self.remove_sublist(input_ids, start_index, end_index)
-
-    def get_ids_to_merge_back(self, left_ids, right_ids):
-        return torch.cat((left_ids != self.tokenizer.eos_token_id, right_ids != self.tokenizer.bos_token_id))
-
-    def get_non_eos_ids(self, left_ids, right_ids):
-        right_real_tokes = torch.logical_and(self.tokenizer.eos_token_id != right_ids,
-                                             self.tokenizer.bos_token_id != right_ids)
-        return torch.cat((left_ids != self.tokenizer.eos_token_id, right_real_tokes))
-
-    def forward(self, input_ids, attention_mask):
-        if not self.mode or self.mode == 'None':
-            return self.text_encoder(input_ids, attention_mask)
-        # just case, all ids are eos
-        if (input_ids == self.tokenizer.eos_token_id).float().mean() > 0.9:
-            return [self.text_encoder(input_ids[:, :1], attention_mask)[0].repeat((1, self.num_embeddings, 1))]
-            # return self.text_encoder(input_ids, attention_mask=attention_mask)
-
-        if self.mode == 'no_eos':
-            return self.text_encoder((input_ids[input_ids != self.tokenizer.eos_token_id]).unsqueeze(0),
-                                     attention_mask=attention_mask)
-
-        if self.mode == 'eos':
-            return self.text_encoder((input_ids[input_ids == self.tokenizer.eos_token_id]).unsqueeze(0),
-                                     attention_mask=attention_mask)
-
-        if self.mode == 'cross':
-            left_ids = self.remove_str(input_ids.squeeze(0), self.right_side)
-            right_ids = self.remove_str(input_ids.squeeze(0), self.left_side)
-            non_eos_ids = self.get_non_eos_ids(left_ids, right_ids)
-
-            out_left = self.text_encoder(left_ids.unsqueeze(0), attention_mask=attention_mask, )[0]
-            out_right = self.text_encoder(right_ids.unsqueeze(0), attention_mask=attention_mask, )[0]
-
-            out = torch.cat((out_left.squeeze(), out_right.squeeze()))
-
-            # eos_left = out_left[:, (self.tokenizer.eos_token_id == left_ids)]
-            # eos_right = out_right[:, (self.tokenizer.eos_token_id == right_ids)]
-            # all_eos = torch.cat((eos_left, eos_right), dim=1).squeeze(0)
-            # all_eos_shuffled = all_eos[torch.randperm(all_eos.shape[0])]
-            #
-            # out_start = out[non_eos_ids]
-            # eos_padding = all_eos_shuffled[:77 - len(out_start)]
-            # out = torch.cat((out_start, eos_padding))
-
-            # merge_back_mask = self.get_ids_to_merge_back(left_ids, right_ids)
-            # out = out[merge_back_mask]
-            self.num_embeddings = out.shape[0]
-
-        if self.mode == 'causal':
-            out = self.text_encoder(input_ids, attention_mask=attention_mask)[0]
-
-            input_ids = input_ids.squeeze(0)
-            start_remove1, end_remove1 = self.find_str_indicies_in_input_ids(input_ids, 'a woman in a red shirt and')
-            ids_tmp = self.remove_str(input_ids, 'a woman in a red shirt and')
-            start_remove2, end_remove2 = self.find_str_indicies_in_input_ids(ids_tmp, 'blue')
-            out = self.remove_sublist(out, start_remove1, end_remove1)
-            out = self.remove_sublist(out, start_remove2, end_remove2)
-            return [out]
-
-        return [out.unsqueeze(0)]
 
 
 def do_validation(accelerator, args, cache_dir, text_encoder, unet, vae, tokenizer, times_gen=1):
     # args.validation_prompt = "a woman in a red shirt and a man in a blue shirt"
     mode = args.mode
-    if mode == 'cross':
+    if mode == 'cross' or mode == 'causal':
         args.validation_prompt = args.left_side + ' ' + args.right_side
 
     logger.info(

@@ -2,7 +2,7 @@ from unittest import TestCase
 
 from transformers import CLIPTokenizer, CLIPTextModel
 
-from src.textual_tracing import TracingTextEncoder
+from src.tracing_text_encoder import TracingTextEncoder
 
 
 class TestTracingTextEncoder(TestCase):

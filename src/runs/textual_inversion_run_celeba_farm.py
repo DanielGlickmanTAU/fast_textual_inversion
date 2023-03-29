@@ -88,7 +88,10 @@ random.shuffle(celeb_ids)
 for celeb_id in celeb_ids:
     if run_utils.is_id_done(celeb_id):
         continue
-
+    train_dir = get_celeb_dir() + '/' + str(celeb_id)
+    num_images = len([x for x in os.listdir(train_dir) if 'jpg' in x])
+    if num_images == 0:
+        continue
     p = gridsearch(params, params_for_exp)[0]
     if s3_upload:
         p['--s3_upload'] = ''
@@ -98,7 +101,6 @@ for celeb_id in celeb_ids:
 
     time_signature = str(time.time())
     p['--mark_done'] = str(celeb_id)
-    train_dir = get_celeb_dir() + '/' + str(celeb_id)
     p['--train_data_dir'] = train_dir
     train_output_dir = train_dir + '/training_output/' + dataset + '_' + time_signature
     p['--output_dir'] = train_output_dir

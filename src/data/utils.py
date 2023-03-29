@@ -100,3 +100,15 @@ def celebhq_flow():
         print(f'moving embeddings to {embeddings_dir}')
         os.mkdir(embeddings_dir)
         os.system(f'cp -r {extracted_path}/*.bin {embeddings_dir}')
+
+
+import random
+
+
+def create_splits():
+    dir = 'celebhq_dataset/data/'
+    images = os.path.listdir(dir)
+    random.shuffle(images)
+    train_part = int(len(images) * 0.9)
+    eval_part = int(len(images) * 0.95)
+    return {'train': images[:train_part], 'eval': images[train_part:eval_part], 'test': images[eval_part:]}
