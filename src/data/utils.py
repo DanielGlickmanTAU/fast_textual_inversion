@@ -25,6 +25,7 @@ def interpolate_embedding(text_encoder, args, placeholder_token_id, num_checkpoi
 import boto3
 import zipfile
 import os
+import zipfile
 
 
 def s3_upload(output_dir, zipname):
@@ -42,3 +43,60 @@ def s3_upload(output_dir, zipname):
     # Upload the zip file to Amazon S3
     with open(zipname, 'rb') as data:
         s3.upload_fileobj(data, 'fast-inversion', zipname)
+
+
+def get_all_keys_with_prefix(bucket_name='fast-inversion', objects_name_prefix='celeb', s3=boto3.client('s3')):
+    paginator = s3.get_paginator('list_objects')
+    result_iterator = paginator.paginate(
+        Bucket=bucket_name,
+        Prefix=objects_name_prefix,
+        PaginationConfig={
+            'PageSize': 1000
+        }
+    )
+    l = []
+    for page in result_iterator:
+        l.extend([x['Key'] for x in page['Contents']])
+    return l
+    # response = s3.list_objects_v2(Bucket=bucket_name, Prefix=objects_name_prefix)
+    # return [x['Key'] for x in response['Contents']]
+
+
+def download_file_and_extract_zip(s3_client, filekey, bucket_name='fast-inversion'):
+    # download
+    download_path = f's3_data/{filekey}'
+    extract_path = download_path.replace('.zip', '')
+
+    if os.path.exists(extract_path):
+        print(f'{extract_path} exists, skipping download')
+        return False
+    s3_client.download_file(bucket_name, filekey, download_path)
+    print(f'downloaded {filekey} into {download_path}')
+    # extract
+    with zipfile.ZipFile(download_path, 'r') as zip_ref:
+        zip_ref.extractall(extract_path)
+    return extract_path
+
+
+import json
+
+
+def extract_image_id(extracted_path):
+    with open(f'{extracted_path}/args.json', 'r') as f:
+        d = json.load(f)
+        return d['mark_done']
+
+
+def celebhq_flow():
+    s3 = boto3.client('s3')
+    keys = get_all_keys_with_prefix(objects_name_prefix='celeb', s3=s3)
+    for key in keys:
+        extracted_path = download_file_and_extract_zip(s3, key)
+        if not extracted_path:
+            continue
+        celeb_img_id = extract_image_id(extracted_path)
+        celeb_dataset_dir = f'celebhq_dataset/data/{celeb_img_id}'
+        embeddings_dir = f'{celeb_dataset_dir}/embeddings'
+        print(f'moving embeddings to {embeddings_dir}')
+        os.mkdir(embeddings_dir)
+        os.system(f'cp -r {extracted_path}/*.bin {embeddings_dir}')

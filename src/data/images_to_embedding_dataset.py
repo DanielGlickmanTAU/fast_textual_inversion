@@ -51,6 +51,10 @@ def embedding_bin_file_path_to_tensor(path):
 
 class ImagesEmbeddingDataset(Dataset):
     def __init__(self, train_data_parent_dir, embedding_dir, as_json, flip_p=0.5):
+        # dict with train,eval,test list of indicies
+        d = json.load(open('split.json', 'r'))
+
+
         self.flip_transform = transforms.RandomHorizontalFlip(p=flip_p)
         paths = get_celeb_dirs(train_data_parent_dir)
         images = [self.get_images(p, False) for p in paths]
