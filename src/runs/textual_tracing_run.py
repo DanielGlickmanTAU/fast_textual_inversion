@@ -49,7 +49,17 @@ params = {
     '--validation_epochs': validation_epochs,
     '--dataset': dataset,
     # '--mode': 'causal'
-    '--mode': 'cross'
+    '--mode': 'cross',
+    # '--mode': 'no_eos'
+    # '--mode': 'eos'
+    # '--left_side': '"a man in a blue shirt"',
+    # '--left_side': '"a red banana"',
+    # '--left_side': '"a red ball"',
+    '--left_side': '"a red dog"',
+    # '--right_side': '"and a yellow tomato"',
+    # '--right_side': '"on a green box"',
+    '--right_side': '"on a green bed"',
+    # '--right_side': '"and a woman in a red shirt"'
 
 }
 

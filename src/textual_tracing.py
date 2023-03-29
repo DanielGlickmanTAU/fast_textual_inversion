@@ -16,6 +16,8 @@ import json
 import sys
 import os
 
+from src.CustomDiffusionPipeline import CustomDiffusionPipeline
+
 sys.path.append(os.path.abspath('..'))
 from src import run_utils
 from src.data import concepts_datasets, utils
@@ -99,6 +101,11 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Simple example of a training script.")
     parser.add_argument('--mode', type=str, default='cross')
 
+    parser.add_argument('--left_side', type=str, default='a woman in a red shirt')
+    parser.add_argument('--right_side', type=str, default='and a man in a blue shirt')
+
+    parser.add_argument('--steps_to_repeat', nargs='*', default=[])
+    parser.add_argument('--std', type=float, default=0.1)
     parser.add_argument(
         "--save_steps",
         type=int,
@@ -111,6 +118,9 @@ def parse_args():
         default=False,
         help="Save only the embeddings for the new concept.",
     )
+
+    parser.add_argument('--times_gen', type=int, default=100)
+
     parser.add_argument(
         "--pretrained_model_name_or_path",
         type=str,
@@ -542,7 +552,7 @@ def main():
     progress_bar = tqdm(range(global_step, args.max_train_steps), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Steps")
 
-    do_validation(accelerator, args, cache_dir, text_encoder, unet, vae, tokenizer, times_gen=200)
+    do_validation(accelerator, args, cache_dir, text_encoder, unet, vae, tokenizer, times_gen=args.times_gen)
 
     # Create the pipeline using using the trained modules and save it.
     accelerator.wait_for_everyone()
@@ -571,8 +581,10 @@ def main():
 
 # class TracingTextEncoder(CLIPTextModel):
 class TracingTextEncoder(torch.nn.Module):
-    def __init__(self, text_encoder, tokenizer, mode='cross'):
+    def __init__(self, text_encoder, tokenizer, mode='cross', left_side=None, right_side=None):
         super().__init__()
+        self.right_side = right_side
+        self.left_side = left_side
         self.mode = mode
         self.tokenizer = tokenizer
         self.text_encoder = text_encoder
@@ -619,15 +631,22 @@ class TracingTextEncoder(torch.nn.Module):
     def forward(self, input_ids, attention_mask):
         if not self.mode or self.mode == 'None':
             return self.text_encoder(input_ids, attention_mask)
-
         # just case, all ids are eos
         if (input_ids == self.tokenizer.eos_token_id).float().mean() > 0.9:
-            # return [self.text_encoder(input_ids[:, :1], attention_mask)[0].repeat((1, self.num_embeddings, 1))]
-            return self.text_encoder(input_ids, attention_mask=attention_mask)
+            return [self.text_encoder(input_ids[:, :1], attention_mask)[0].repeat((1, self.num_embeddings, 1))]
+            # return self.text_encoder(input_ids, attention_mask=attention_mask)
+
+        if self.mode == 'no_eos':
+            return self.text_encoder((input_ids[input_ids != self.tokenizer.eos_token_id]).unsqueeze(0),
+                                     attention_mask=attention_mask)
+
+        if self.mode == 'eos':
+            return self.text_encoder((input_ids[input_ids == self.tokenizer.eos_token_id]).unsqueeze(0),
+                                     attention_mask=attention_mask)
 
         if self.mode == 'cross':
-            left_ids = self.remove_str(input_ids.squeeze(0), 'and a man in a blue shirt')
-            right_ids = self.remove_str(input_ids.squeeze(0), 'a woman in a red shirt')
+            left_ids = self.remove_str(input_ids.squeeze(0), self.right_side)
+            right_ids = self.remove_str(input_ids.squeeze(0), self.left_side)
             non_eos_ids = self.get_non_eos_ids(left_ids, right_ids)
 
             out_left = self.text_encoder(left_ids.unsqueeze(0), attention_mask=attention_mask, )[0]
@@ -635,14 +654,14 @@ class TracingTextEncoder(torch.nn.Module):
 
             out = torch.cat((out_left.squeeze(), out_right.squeeze()))
 
-            eos_left = out_left[:, (self.tokenizer.eos_token_id == left_ids)]
-            eos_right = out_right[:, (self.tokenizer.eos_token_id == right_ids)]
-            all_eos = torch.cat((eos_left, eos_right), dim=1).squeeze(0)
-            all_eos_shuffled = all_eos[torch.randperm(all_eos.shape[0])]
-
-            out_start = out[non_eos_ids]
-            eos_padding = all_eos_shuffled[:77 - len(out_start)]
-            out = torch.cat((out_start, eos_padding))
+            # eos_left = out_left[:, (self.tokenizer.eos_token_id == left_ids)]
+            # eos_right = out_right[:, (self.tokenizer.eos_token_id == right_ids)]
+            # all_eos = torch.cat((eos_left, eos_right), dim=1).squeeze(0)
+            # all_eos_shuffled = all_eos[torch.randperm(all_eos.shape[0])]
+            #
+            # out_start = out[non_eos_ids]
+            # eos_padding = all_eos_shuffled[:77 - len(out_start)]
+            # out = torch.cat((out_start, eos_padding))
 
             # merge_back_mask = self.get_ids_to_merge_back(left_ids, right_ids)
             # out = out[merge_back_mask]
@@ -655,8 +674,6 @@ class TracingTextEncoder(torch.nn.Module):
             start_remove1, end_remove1 = self.find_str_indicies_in_input_ids(input_ids, 'a woman in a red shirt and')
             ids_tmp = self.remove_str(input_ids, 'a woman in a red shirt and')
             start_remove2, end_remove2 = self.find_str_indicies_in_input_ids(ids_tmp, 'blue')
-            # ids = self.remove_str(ids, 'blue')
-            # no not good... I need to get indicies. then encode. then remove
             out = self.remove_sublist(out, start_remove1, end_remove1)
             out = self.remove_sublist(out, start_remove2, end_remove2)
             return [out]
@@ -665,20 +682,28 @@ class TracingTextEncoder(torch.nn.Module):
 
 
 def do_validation(accelerator, args, cache_dir, text_encoder, unet, vae, tokenizer, times_gen=1):
-    args.validation_prompt = "a woman in a red shirt and a man in a blue shirt"
+    # args.validation_prompt = "a woman in a red shirt and a man in a blue shirt"
+    mode = args.mode
+    if mode == 'cross':
+        args.validation_prompt = args.left_side + ' ' + args.right_side
 
     logger.info(
         f"Running validation... \n Generating {args.num_validation_images} images with prompt:"
         f" {args.validation_prompt}."
     )
     # create pipeline (note: unet and vae are loaded again in float32)
-    pipeline = DiffusionPipeline.from_pretrained(
+    pipeline = CustomDiffusionPipeline.from_pretrained(
         args.pretrained_model_name_or_path, cache_dir=cache_dir,
         text_encoder=accelerator.unwrap_model(text_encoder),
         unet=accelerator.unwrap_model(unet),
         vae=accelerator.unwrap_model(vae),
         tokenizer=tokenizer,
         revision=args.revision,
+        requires_safety_checker=False,
+        num_repeats=3,
+        # steps_to_repeat=[23]
+        steps_to_repeat=[int(x) for x in args.steps_to_repeat],
+        std=args.std,
     )
     pipeline.scheduler = DPMSolverMultistepScheduler.from_config(pipeline.scheduler.config)
     pipeline = pipeline.to(accelerator.device)
@@ -689,10 +714,10 @@ def do_validation(accelerator, args, cache_dir, text_encoder, unet, vae, tokeniz
         None if args.seed is None else torch.Generator(device=accelerator.device).manual_seed(args.seed)
     )
     prompt = args.num_validation_images * [args.validation_prompt]
-    mode = args.mode
-    pipeline.text_encoder = TracingTextEncoder(pipeline.text_encoder, tokenizer, mode)
+    pipeline.text_encoder = TracingTextEncoder(pipeline.text_encoder, tokenizer, mode, args.left_side, args.right_side)
     for _ in range(times_gen):
         images = pipeline(prompt, num_inference_steps=25, generator=generator).images
+        # images = pipeline(prompt, num_inference_steps=5, generator=generator).images
         for tracker in accelerator.trackers:
             # if tracker.name == "tensorboard":
             #     np_images = np.stack([np.asarray(img) for img in images])
