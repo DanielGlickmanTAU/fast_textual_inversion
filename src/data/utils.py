@@ -107,7 +107,7 @@ import random
 
 def create_splits():
     dir = 'celebhq_dataset/data/'
-    images = os.path.listdir(dir)
+    images = os.listdir(dir)
     random.shuffle(images)
     train_part = int(len(images) * 0.9)
     eval_part = int(len(images) * 0.95)
