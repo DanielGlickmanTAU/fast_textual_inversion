@@ -35,6 +35,8 @@ def s3_upload(output_dir, zipname):
                 ziph.write(os.path.join(root, file), arcname=file)
 
     s3 = boto3.client('s3')
+    # always end with .zip
+    zipname = zipname.replace('.zip', '') + '.zip'
 
     zipf = zipfile.ZipFile(zipname, 'w', zipfile.ZIP_DEFLATED)
     zipdir(output_dir, zipf)
@@ -104,10 +106,11 @@ def celebhq_flow():
 
 import random
 
+celebhq_dir = 'celebhq_dataset/data/'
+
 
 def create_splits():
-    dir = 'celebhq_dataset/data/'
-    images = os.listdir(dir)
+    images = os.listdir(celebhq_dir)
     random.shuffle(images)
     train_part = int(len(images) * 0.9)
     eval_part = int(len(images) * 0.95)

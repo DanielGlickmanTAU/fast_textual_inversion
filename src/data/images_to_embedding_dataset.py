@@ -1,6 +1,10 @@
 import json
 import re
 
+import PIL
+from PIL import Image
+from torchvision.transforms import transforms
+
 from src.data import concepts_datasets
 from src.data.concepts_datasets import get_project_dir
 from src.misc import compute
@@ -50,24 +54,65 @@ def embedding_bin_file_path_to_tensor(path):
 
 
 class ImagesEmbeddingDataset(Dataset):
-    def __init__(self, train_data_parent_dir, embedding_dir, as_json, flip_p=0.5):
-        # dict with train,eval,test list of indicies
-        d = json.load(open('split.json', 'r'))
-
+    def __init__(self, split='train', base_dir='celebhq_dataset/', image_size=512, flip_p=0.5):
+        self.image_size = image_size
+        self.base_dir = base_dir
+        self.split = json.load(open(base_dir + 'split.json', 'r'))[split]
+        self.paths = self.get_dirs()
 
         self.flip_transform = transforms.RandomHorizontalFlip(p=flip_p)
-        paths = get_celeb_dirs(train_data_parent_dir)
-        images = [self.get_images(p, False) for p in paths]
-        embeddings = [get_celeb_embedding_from_train_data_dir(p) for p in paths]
+        # images = [self.get_images(p, False) for p in paths]
+        # embeddings = [get_celeb_embedding_from_train_data_dir(p) for p in paths]
         # todo: some embeddings will be None until all jobs are finished
 
+    def get_dirs(self, ):
+        datadir = os.path.join(self.base_dir, 'data')
+        return [os.path.join(datadir, instance_id) for instance_id in self.split]
+
+    def __len__(self):
+        return len(self.paths)
+
+    def __getitem__(self, index):
+        path = self.paths[index]
+        images = [self.load_image(image_path) for image_path in self.get_images_path(path)]
+        steps = None
+        embeddings = [self.load_embedding(embd_path) for embd_path in self.get_embeddings(path, steps)]
+
+        return {'images': images, 'path': path}
+
     @staticmethod
-    def get_images(train_data_dir, as_json):
+    def get_images_path(instance_dir, as_json=False):
         if as_json:
-            state = json.load(open(train_data_dir, 'r'))
+            state = json.load(open(instance_dir, 'r'))
             images = concepts_datasets.get_images_from_dataset_state(state)
         else:
-            images = [os.path.join(train_data_dir, file_path) for file_path in os.listdir(train_data_dir) if
+            images = [os.path.join(instance_dir, file_path) for file_path in os.listdir(instance_dir) if
                       'png' in file_path or 'jpg' in file_path or 'jpeg' in file_path]
 
         return images
+
+    def load_image(self, image_path):
+        image = Image.open(image_path)
+        if not image.mode == "RGB":
+            image = image.convert("RGB")
+
+        # default to score-sde preprocessing
+        img = np.array(image).astype(np.uint8)
+
+        image = Image.fromarray(img)
+        image = image.resize((self.image_size, self.image_size), resample=PIL.Image.Resampling.BICUBIC)
+
+        image = self.flip_transform(image)
+        image = np.array(image).astype(np.uint8)
+        image = (image / 127.5 - 1.0).astype(np.float32)
+
+        return torch.from_numpy(image).permute(2, 0, 1)
+
+    def get_embeddings(self, instance_dir, steps):
+        # todo filter right embeddings file names with steps
+        # todo, dont list, just create exact names(-0.bin, -1.bin etc)
+        embeddings_dir = os.path.join(instance_dir, 'embeddings')
+        return [os.path.join(embeddings_dir, emb_file_name) for emb_file_name in os.listdir(embeddings_dir)]
+
+    def load_embedding(self, embd_path):
+        return torch.load(embd_path, map_location=torch.device('cpu'))['my_new_token']
