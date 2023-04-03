@@ -48,11 +48,23 @@ params = {
     '--num_validation_images': 1,
     '--validation_epochs': validation_epochs,
     '--dataset': dataset,
-    '--mode': 'causal',
-    # '--validation_prompt': '"a man in a blue shirt and a woman in red a shirt"',
-    '--validation_prompt': '"A photo of a red ball a blue box a green computer a purple clock and pink shoes"',
+    # '--validation_prompt': '"An image of "',
 
-    # '--mode': 'cross',
+    '--mode': 'None',
+    '--validation_prompt': '"An image of a small red dog and a huge blue cat"',
+    # '--validation_prompt': '"An image of a man with a blue shirt and a woman with a red shirt"',
+    # '--validation_prompt': '"An image of a red ball on top of a green box"',
+    # '--validation_prompt': '"an apple a computer"',
+    # '--validation_prompt': '"a ball that is purple"',
+    # '--validation_prompt': '"A photo realistic high quality image that contains an image of a red ball and also a box that is green"',
+    # '--validation_prompt': '"A photo of a red ball a blue box a green computer a purple clock and pink shoes"',
+    # '--validation_prompt': '"A photo of a red ball a blue box"',
+    # '--left_side': '"a purple clock"',
+    # '--left_side': '"a"',
+    # '--left_side': '"a green computer"',
+    # '--left_side': '"a blue box"',
+    '--left_side': '"a huge blue cat"',
+    # '--left_side': '"blue box"',
     # '--mode': 'no_eos'
     # '--mode': 'eos'
     # '--left_side': '"a man in a blue shirt"',
@@ -60,14 +72,10 @@ params = {
     # '--right_side': '"a woman in a red shirt"',
     # '--left_side': '"a red banana"',
     # '--left_side': '"a red ball"',
-    # '--left_side': '"a red dog"',
-    # '--left_side': '"a woman in red a shirt"',
-    '--left_side': '"a blue box a green computer a purple clock and pink shoes"',
     # '--right_side': '"and a yellow tomato"',
     # '--right_side': '"on a green box"',
     # '--right_side': '"a red ball"',
     # '--left_side': '"on a green box"',
-    # '--right_side': '"on a green bed"',
     # '--right_side': '"and a woman in a red shirt"'
     # '--right_side': '"and a man in a blue shirt"'
 
@@ -83,7 +91,7 @@ params_for_exp = {
 }
 
 os.chdir('..')
-job_name = '''textual_tracing.py'''
+job_name = '''attention_control.py'''
 ids = []
 for _ in range(overall_runs):
 

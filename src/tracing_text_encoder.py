@@ -2,6 +2,23 @@ import torch
 import torch.nn
 
 
+def find_str_indicies_in_input_ids_(tokenizer, input_ids, str):
+    list_to_remove = tokenizer(str, add_special_tokens=False, return_tensors="pt")['input_ids']
+    list_to_remove = list_to_remove.to(input_ids.device)
+    # Find the starting index of the sublist to remove
+    if list_to_remove.shape[-1] > 1:
+        list_to_remove = list_to_remove.squeeze()
+    input_ids = input_ids.squeeze()
+    start_index = (input_ids == list_to_remove[0]).nonzero(as_tuple=False)
+
+    # Check if the sublist matches the list_to_remove
+    for start in start_index:
+        end_index = start + len(list_to_remove)
+        if (input_ids[start: end_index].tolist() == list_to_remove.tolist()) or len(list_to_remove) == 1:
+            return start, end_index
+    raise ValueError('str not found')
+
+
 class TracingTextEncoder(torch.nn.Module):
     def __init__(self, text_encoder, tokenizer, mode='cross', left_side=None, right_side=None):
         super().__init__()
@@ -19,20 +36,8 @@ class TracingTextEncoder(torch.nn.Module):
             pass
 
     def find_str_indicies_in_input_ids(self, input_ids, str):
-        list_to_remove = self.tokenizer(str, add_special_tokens=False, return_tensors="pt")['input_ids']
-        list_to_remove = list_to_remove.to(input_ids.device)
-        # Find the starting index of the sublist to remove
-        if list_to_remove.shape[-1] > 1:
-            list_to_remove = list_to_remove.squeeze()
-        input_ids = input_ids.squeeze()
-        start_index = (input_ids == list_to_remove[0]).nonzero(as_tuple=False)
-
-        # Check if the sublist matches the list_to_remove
-        for start in start_index:
-            end_index = start + len(list_to_remove)
-            if (input_ids[start: end_index].tolist() == list_to_remove.tolist()) or len(list_to_remove) == 1:
-                return start, end_index
-        raise ValueError('str not found')
+        tokenizer = self.tokenizer
+        return find_str_indicies_in_input_ids_(tokenizer, input_ids, str)
 
     def remove_sublist(self, input_ids, start_index, end_index):
         input_ids = torch.cat([input_ids[:start_index], input_ids[end_index:]])

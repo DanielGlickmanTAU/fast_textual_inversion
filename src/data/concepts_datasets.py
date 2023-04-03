@@ -36,8 +36,14 @@ def get_food_dir():
 def get_celeb_dir():
     return f'{get_project_dir()}/celebhq'
 
+
 def get_celeb_short_dir():
     return f'{get_project_dir()}/celebhq_short'
+
+
+def get_celeb_joined_dir():
+    return f'{get_project_dir()}/celebhq_dataset/data'
+
 
 def get_food_ds(split='test'):
     return torchvision.datasets.Food101(root=get_food_dir(),

@@ -16,8 +16,8 @@ import sys
 import os
 
 from src.CustomDiffusionPipeline import CustomDiffusionPipeline
-from src.UnetCrossAttentionWrapper import UnetCrossAttentionWrapper
-from src.tracing_text_encoder import TracingTextEncoder
+from src.UnetCrossAttentionWrapper import UnetCrossAttentionWrapper, set_attn_processors
+from src.tracing_text_encoder import TracingTextEncoder, find_str_indicies_in_input_ids_
 
 sys.path.append(os.path.abspath('..'))
 from src import run_utils
@@ -144,7 +144,7 @@ def parse_args():
         help="The output directory where the model predictions and checkpoints will be written.",
     )
     parser.add_argument("--seed", type=int, default=None, help="A seed for reproducible training.")
-    parser.add_argument('--wandb_project', type=str, default='composability tracing', help='wandb project name')
+    parser.add_argument('--wandb_project', type=str, default='attention_control', help='wandb project name')
 
     parser.add_argument(
         "--resolution",
@@ -161,7 +161,7 @@ def parse_args():
     parser.add_argument(
         "--train_batch_size", type=int, default=16, help="Batch size (per device) for the training dataloader."
     )
-    parser.add_argument("--num_train_epochs", type=int, default=100)
+    parser.add_argument("--num_train_epochs", type=int, default=20)
     parser.add_argument(
         "--max_train_steps",
         type=int,
@@ -423,7 +423,12 @@ def main():
                                         revision=args.revision)
     # save some memory..
     vae.encoder = None
-    unet = UnetCrossAttentionWrapper.from_pretrained(
+
+    # unet = UnetCrossAttentionWrapper.from_pretrained(
+    #     args.pretrained_model_name_or_path, cache_dir=cache_dir, subfolder="unet", revision=args.revision
+    # )
+
+    unet = UNet2DConditionModel.from_pretrained(
         args.pretrained_model_name_or_path, cache_dir=cache_dir, subfolder="unet", revision=args.revision
     )
 
@@ -567,6 +572,23 @@ def do_validation(accelerator, args, cache_dir, text_encoder, unet, vae, tokeniz
         f"Running validation... \n Generating {args.num_validation_images} images with prompt:"
         f" {args.validation_prompt}."
     )
+
+    input_ids = tokenizer(
+        args.validation_prompt,
+        padding="max_length",
+        max_length=tokenizer.model_max_length,
+        truncation=True,
+        return_tensors="pt",
+    ).input_ids
+    # hack to check masking everything...
+    if args.left_side == '$':
+        start_index, end_index = '$', '$'
+    else:
+        start_index, end_index = find_str_indicies_in_input_ids_(tokenizer, input_ids, str=args.left_side)
+    unet.start_index, unet.end_index = start_index, end_index
+
+    set_attn_processors(unet, start_index, end_index)
+
     # create pipeline (note: unet and vae are loaded again in float32)
     pipeline = CustomDiffusionPipeline.from_pretrained(
         args.pretrained_model_name_or_path, cache_dir=cache_dir,
@@ -590,7 +612,8 @@ def do_validation(accelerator, args, cache_dir, text_encoder, unet, vae, tokeniz
         None if args.seed is None else torch.Generator(device=accelerator.device).manual_seed(args.seed)
     )
     prompt = args.num_validation_images * [args.validation_prompt]
-    pipeline.text_encoder = TracingTextEncoder(pipeline.text_encoder, tokenizer, mode, args.left_side, args.right_side)
+    # pipeline.text_encoder = TracingTextEncoder(pipeline.text_encoder, tokenizer, mode, args.left_side, args.right_side)
+
     for _ in range(times_gen):
         images = pipeline(prompt, num_inference_steps=25, generator=generator).images
         # images = pipeline(prompt, num_inference_steps=5, generator=generator).images

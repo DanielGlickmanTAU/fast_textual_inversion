@@ -560,17 +560,19 @@ def main():
 def do_validation(accelerator, args, cache_dir, text_encoder, unet, vae, tokenizer, times_gen=1):
     # args.validation_prompt = "a woman in a red shirt and a man in a blue shirt"
     mode = args.mode
-    if mode == 'cross' or mode == 'causal':
+
+    # if mode == 'cross' or mode == 'causal':
+    if mode == 'cross':
         args.validation_prompt = args.left_side + ' ' + args.right_side
 
     logger.info(
         f"Running validation... \n Generating {args.num_validation_images} images with prompt:"
         f" {args.validation_prompt}."
     )
-    # create pipeline (note: unet and vae are loaded again in float32)
+
     pipeline = CustomDiffusionPipeline.from_pretrained(
         args.pretrained_model_name_or_path, cache_dir=cache_dir,
-        text_encoder=accelerator.unwrap_model(text_encoder),
+        text_encoder=text_encoder,
         unet=accelerator.unwrap_model(unet),
         vae=accelerator.unwrap_model(vae),
         tokenizer=tokenizer,
@@ -581,6 +583,7 @@ def do_validation(accelerator, args, cache_dir, text_encoder, unet, vae, tokeniz
         steps_to_repeat=[int(x) for x in args.steps_to_repeat],
         std=args.std,
     )
+    pipeline.text_encoder = TracingTextEncoder(pipeline.text_encoder, tokenizer, mode, args.left_side, args.right_side)
     pipeline.scheduler = DPMSolverMultistepScheduler.from_config(pipeline.scheduler.config)
     pipeline = pipeline.to(accelerator.device)
     pipeline.set_progress_bar_config(disable=True)
@@ -590,7 +593,7 @@ def do_validation(accelerator, args, cache_dir, text_encoder, unet, vae, tokeniz
         None if args.seed is None else torch.Generator(device=accelerator.device).manual_seed(args.seed)
     )
     prompt = args.num_validation_images * [args.validation_prompt]
-    pipeline.text_encoder = TracingTextEncoder(pipeline.text_encoder, tokenizer, mode, args.left_side, args.right_side)
+
     for _ in range(times_gen):
         images = pipeline(prompt, num_inference_steps=25, generator=generator).images
         # images = pipeline(prompt, num_inference_steps=5, generator=generator).images
