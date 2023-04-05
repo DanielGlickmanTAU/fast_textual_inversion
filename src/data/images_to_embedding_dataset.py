@@ -68,7 +68,12 @@ class ImagesEmbeddingDataset(Dataset):
 
     def get_dirs(self, ):
         datadir = os.path.join(self.base_dir, 'data')
-        return [os.path.join(datadir, instance_id) for instance_id in self.split]
+        all_dirs = [os.path.join(datadir, instance_id) for instance_id in self.split]
+        dirs_with_embeddings = [dir for dir in all_dirs if os.path.exists(dir + '/embeddings')]
+        print(f'WARNING: only {len(dirs_with_embeddings)} out of {len(all_dirs)} instances have embeddings')
+        print(f'WARNING: only {len(dirs_with_embeddings)} out of {len(all_dirs)} instances have embeddings')
+        print(f'WARNING: only {len(dirs_with_embeddings)} out of {len(all_dirs)} instances have embeddings')
+        return dirs_with_embeddings
 
     def __len__(self):
         return len(self.paths)
@@ -76,8 +81,7 @@ class ImagesEmbeddingDataset(Dataset):
     def __getitem__(self, index):
         path = self.paths[index]
         images = [self.load_image(image_path) for image_path in self.get_images_path(path)]
-        steps = None
-        embeddings = [self.load_embedding(embd_path) for embd_path in self.get_embeddings(path, steps)]
+        embeddings = [self.load_embedding(embd_path) for embd_path in self.get_embeddings(path)]
 
         return {'images': images, 'path': path}
 
@@ -109,7 +113,7 @@ class ImagesEmbeddingDataset(Dataset):
 
         return torch.from_numpy(image).permute(2, 0, 1)
 
-    def get_embeddings(self, instance_dir, steps):
+    def get_embeddings(self, instance_dir):
         embeddings_dir = os.path.join(instance_dir, 'embeddings')
         return [os.path.join(embeddings_dir, f'learned_embeds-steps-{step}.bin') for step in self.steps]
 
