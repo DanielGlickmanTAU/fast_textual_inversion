@@ -54,13 +54,17 @@ def embedding_bin_file_path_to_tensor(path):
 
 
 class ImagesEmbeddingDataset(Dataset):
-    def __init__(self, split='train', base_dir='celebhq_dataset/', image_size=512, flip_p=0.5):
+    def __init__(self, split='train', base_dir='celebhq_dataset/', image_size=512, flip_p=0.5, steps=None):
         self.image_size = image_size
         self.base_dir = base_dir
         self.split = json.load(open(base_dir + 'split.json', 'r'))[split]
         self.paths = self.get_dirs()
-        self.steps = [0, 20, 40, 60, 80, 100, 140, 200, 400, 600, 800, 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2400,
-                      2600, 2800, 3000, 3200, 3400, 3600, 3800, 4000, 4200, 4400, 4600, 4800, 5000]
+        if steps is not None:
+            self.steps = steps
+        else:
+            self.steps = [0, 20, 40, 60, 80, 100, 140, 200, 400, 600, 800, 1000, 1200, 1400, 1600, 1800, 2000, 2200,
+                          2400,
+                          2600, 2800, 3000, 3200, 3400, 3600, 3800, 4000, 4200, 4400, 4600, 4800, 5000]
         self.flip_transform = transforms.RandomHorizontalFlip(p=flip_p)
         # images = [self.get_images(p, False) for p in paths]
         # embeddings = [get_celeb_embedding_from_train_data_dir(p) for p in paths]
@@ -83,7 +87,7 @@ class ImagesEmbeddingDataset(Dataset):
         images = [self.load_image(image_path) for image_path in self.get_images_path(path)]
         embeddings = [self.load_embedding(embd_path) for embd_path in self.get_embeddings(path)]
 
-        return {'images': images, 'path': path}
+        return {'images': images, 'path': path, 'embeddings': embeddings}
 
     @staticmethod
     def get_images_path(instance_dir, as_json=False):
