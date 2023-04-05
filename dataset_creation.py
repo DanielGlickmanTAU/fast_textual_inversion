@@ -57,16 +57,12 @@ class ImageEmbeddingInput(OrderedDict):
     embeddings: List[torch.Tensor]
 
 
-class Mod(torch.nn.Module):
-    def forward(self, input):
-        print(input)
-
-
-ds = ImagesEmbeddingDataset(steps=[0, 20, 40, 60, 80])
+ds = ImagesEmbeddingDataset(steps=[*range(5001)][::20][:2000])
 ds[0]
 loader = torch.utils.data.DataLoader(
-    ds, batch_size=32, shuffle=True, pin_memory=True, collate_fn=custom_collate
+    ds, batch_size=200, shuffle=True, pin_memory=True, collate_fn=custom_collate
 )
-mod = Mod()
+
 for x in loader:
-    mod(x)
+    print(x)
+    print([(a - b).norm(2, dim=-1).mean() for a, b in zip(x.embeddings[:-1], x.embeddings[1:])])
