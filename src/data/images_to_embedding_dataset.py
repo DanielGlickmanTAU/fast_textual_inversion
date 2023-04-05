@@ -59,7 +59,8 @@ class ImagesEmbeddingDataset(Dataset):
         self.base_dir = base_dir
         self.split = json.load(open(base_dir + 'split.json', 'r'))[split]
         self.paths = self.get_dirs()
-
+        self.steps = [0, 20, 40, 60, 80, 100, 140, 200, 400, 600, 800, 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2400,
+                      2600, 2800, 3000, 3200, 3400, 3600, 3800, 4000, 4200, 4400, 4600, 4800, 5000]
         self.flip_transform = transforms.RandomHorizontalFlip(p=flip_p)
         # images = [self.get_images(p, False) for p in paths]
         # embeddings = [get_celeb_embedding_from_train_data_dir(p) for p in paths]
@@ -109,10 +110,8 @@ class ImagesEmbeddingDataset(Dataset):
         return torch.from_numpy(image).permute(2, 0, 1)
 
     def get_embeddings(self, instance_dir, steps):
-        # todo filter right embeddings file names with steps
-        # todo, dont list, just create exact names(-0.bin, -1.bin etc)
         embeddings_dir = os.path.join(instance_dir, 'embeddings')
-        return [os.path.join(embeddings_dir, emb_file_name) for emb_file_name in os.listdir(embeddings_dir)]
+        return [os.path.join(embeddings_dir, f'learned_embeds-steps-{step}.bin') for step in self.steps]
 
     def load_embedding(self, embd_path):
         return torch.load(embd_path, map_location=torch.device('cpu'))['my_new_token']

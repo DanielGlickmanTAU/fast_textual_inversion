@@ -1,0 +1,4 @@
+misc:
+
+find embeddings step names:
+[int(x[x.index('steps-')+6:-4]) for x in sorted(self.get_embeddings(path,steps))[:-1]]
