@@ -57,11 +57,24 @@ class ImageEmbeddingInput(OrderedDict):
     embeddings: List[torch.Tensor]
 
 
-ds = ImagesEmbeddingDataset(steps=[*range(5001)][::20][:2000])
+ds = ImagesEmbeddingDataset(
+    steps=[0, 40, 100, 180, 280, 400, 520,660, 800, 1000, 1200, 1400, 1600, 1800, 2000, 2200,
+           2400,
+           2600, 2800, 3000, 3200, 3400, 3600, 3800, 4000, 4200, 4400, 4600, 4800, 5000]
+)
 ds[0]
 loader = torch.utils.data.DataLoader(
     ds, batch_size=200, shuffle=True, pin_memory=True, collate_fn=custom_collate
 )
+
+import matplotlib.pyplot as plt
+
+
+def show(x):
+    diffs = [(a - b).norm(2, dim=-1).mean().item() for a, b in zip(x.embeddings[:-1], x.embeddings[1:])]
+    plt.plot(diffs)
+    plt.show()
+
 
 for x in loader:
     print(x)
