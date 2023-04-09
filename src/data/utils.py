@@ -75,6 +75,10 @@ def download_file_and_extract_zip(s3_client, filekey, bucket_name='fast-inversio
     s3_client.download_file(bucket_name, filekey, download_path)
     print(f'downloaded {filekey} into {download_path}')
     # extract
+    return extract_zip_to_path(download_path, extract_path)
+
+
+def extract_zip_to_path(download_path, extract_path):
     with zipfile.ZipFile(download_path, 'r') as zip_ref:
         zip_ref.extractall(extract_path)
     return extract_path

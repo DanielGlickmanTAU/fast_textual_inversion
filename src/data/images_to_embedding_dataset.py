@@ -15,6 +15,7 @@ from torchvision.transforms import transforms
 
 from src.data import concepts_datasets
 from src.data.concepts_datasets import get_project_dir
+from src.data.utils import extract_zip_to_path
 
 
 def get_celeb_dirs(celeb_parent_dir=get_project_dir() + '/celebhq'):
@@ -47,10 +48,13 @@ def embedding_bin_file_path_to_tensor(path):
 
 
 class ImagesEmbeddingDataset(Dataset):
-    def __init__(self, split='train', base_dir='celebhq_dataset/', image_size=512, flip_p=0.5, steps=None):
+    def __init__(self, split='train', base_dir='celebhq_dataset/', image_size=512, flip_p=0.5, steps=None,
+                 download=False):
         assert split in ['train', 'eval', 'test']
         self.image_size = image_size
         self.base_dir = base_dir
+        if download:
+            self.download()
         self.split = json.load(open(base_dir + 'split.json', 'r'))[split]
         self.paths = self.get_dirs()
         if steps is not None:
@@ -116,6 +120,12 @@ class ImagesEmbeddingDataset(Dataset):
 
     def load_embedding(self, embd_path):
         return torch.load(embd_path, map_location=torch.device('cpu'))['my_new_token']
+
+    def download(self):
+        link = None
+        zip = 'dataset_celebhq.zip'
+        os.system(f'curl --get {none} >> {zip}')
+        extract_zip_to_path(link, self.base_dir)
 
 
 @dataclasses.dataclass
