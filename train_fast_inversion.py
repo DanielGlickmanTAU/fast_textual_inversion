@@ -14,7 +14,9 @@ class TrainConfig:
     batch_size: int = 32
     learning_rate: float = 3e-4
     epochs: int = 100
+
     exp_name: str = 'fast_inversion_train'
+    use_wandb: bool = False
 
 
 cfg = pyrallis.parse(config_class=TrainConfig)
