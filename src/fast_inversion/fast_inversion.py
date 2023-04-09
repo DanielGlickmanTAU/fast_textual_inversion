@@ -36,8 +36,8 @@ def set_init_emb(init_emb_):
 
 
 def get_embedding_for_image(model, sample):
-    images = sample.images
-    steps = len(sample.embeddings)
+    images = sample['images']
+    steps = len(sample['embeddings'])
     return eval_model(images, model, steps, init_emb)
 
 
