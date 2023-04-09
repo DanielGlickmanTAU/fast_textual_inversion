@@ -48,6 +48,7 @@ def embedding_bin_file_path_to_tensor(path):
 
 class ImagesEmbeddingDataset(Dataset):
     def __init__(self, split='train', base_dir='celebhq_dataset/', image_size=512, flip_p=0.5, steps=None):
+        assert split in ['train', 'eval', 'test']
         self.image_size = image_size
         self.base_dir = base_dir
         self.split = json.load(open(base_dir + 'split.json', 'r'))[split]
@@ -60,6 +61,7 @@ class ImagesEmbeddingDataset(Dataset):
                           2600, 2800, 3000, 3200, 3400, 3600, 3800, 4000, 4200, 4400, 4600, 4800, 5000]
         self.flip_transform = transforms.RandomHorizontalFlip(p=flip_p)
         # todo: some embeddings will be None until all jobs are finished
+        self.init_embd = self[0]['embeddings'][0].detach().clone()
 
     def get_dirs(self, ):
         datadir = os.path.join(self.base_dir, 'data')
@@ -124,6 +126,9 @@ class ImageEmbeddingInput(OrderedDict):
     is_real: torch.Tensor
     # list of size num_embeddings(0 entry is the initial embedding, i.e "person"). Each entry is size (B,d)
     embeddings: List[torch.Tensor]
+
+    def __len__(self):
+        return len(self.images)
 
 
 def pad_images(seq, max_length):
