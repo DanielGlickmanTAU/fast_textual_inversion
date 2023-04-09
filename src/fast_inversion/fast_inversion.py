@@ -1,4 +1,5 @@
 from collections import defaultdict
+from dataclasses import dataclass
 
 import torch.nn.functional as F
 import torch
@@ -8,6 +9,19 @@ from src.fast_inversion.wandb_helper import init_wandb
 import tqdm
 
 from src.misc import compute
+
+
+@dataclass
+class TrainConfig:
+    batch_size: int = 32
+    learning_rate: float = 3e-4
+    epochs: int = 100
+
+    exp_name: str = 'fast_inversion_train'
+    use_wandb: bool = False
+
+    validate_loss: bool = True
+
 
 init_emb = None
 
@@ -19,13 +33,14 @@ def set_init_emb(init_emb_):
     init_emb = init_emb_
 
 
-def train(model, train_loader, eval_dataloader, args):
+def train(model, train_loader, eval_dataloader, args: TrainConfig):
     model = model.to(device)
     wandb = init_wandb(args)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
     for epoch in range(args.epochs):
         train_epoch(model, train_loader, optimizer, wandb)
-        eval_model_epoch(model, eval_dataloader, wandb)
+        if args.validate_loss:
+            eval_model_epoch(model, eval_dataloader, wandb)
 
 
 def train_epoch(model, data_loader, optimizer, wandb, teacher_force=True):
