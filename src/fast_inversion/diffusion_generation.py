@@ -5,15 +5,18 @@ from transformers import CLIPTokenizer, CLIPTextModel
 from src.misc import compute
 import wandb
 
+diffusion_model_name = 'runwayml/stable-diffusion-v1-5'
+num_validation_images = 2
+# num_inference_steps = 25
+num_inference_steps = 10
+placeholder_token = 'my_new_token'
+cache_dir = compute.get_cache_dir()
+
 
 def generate_images(embedding, experiment):
     # TODO:
     # make sure loading learned embedding into model... can look at others code..
     # probably should overwrite pipeline to use my own embeddings with fast embedder
-
-    diffusion_model_name = 'runwayml/stable-diffusion-v1-5'
-    num_validation_images = 4
-    cache_dir = compute.get_cache_dir()
 
     tokenizer = CLIPTokenizer.from_pretrained(diffusion_model_name, cache_dir=cache_dir,
                                               subfolder="tokenizer")
@@ -25,7 +28,9 @@ def generate_images(embedding, experiment):
     unet = UNet2DConditionModel.from_pretrained(
         diffusion_model_name, cache_dir=cache_dir, subfolder="unet", )
 
-    validation_prompt = "An image of my_new_token"
+    set_embedding_in_text_encoder(embedding, text_encoder, tokenizer)
+
+    validation_prompt = f"An image of {placeholder_token}"
 
     # create pipeline (note: unet and vae are loaded again in float32)
     pipeline = DiffusionPipeline.from_pretrained(
@@ -41,7 +46,7 @@ def generate_images(embedding, experiment):
     pipeline.safety_checker = None
 
     prompt = num_validation_images * [validation_prompt]
-    images = pipeline(prompt, num_inference_steps=25).images
+    images = pipeline(prompt, num_inference_steps=num_inference_steps).images
     experiment.log(
         {
             "validation": [
@@ -55,3 +60,17 @@ def generate_images(embedding, experiment):
     del unet
     del pipeline
     torch.cuda.empty_cache()
+
+
+def set_embedding_in_text_encoder(embedding, text_encoder, tokenizer):
+    num_added_tokens = tokenizer.add_tokens(placeholder_token)
+    assert num_added_tokens == 1
+
+    placeholder_token_id = tokenizer.convert_tokens_to_ids(placeholder_token)
+
+    # Resize the token embeddings as we are adding new special tokens to the tokenizer
+    text_encoder.resize_token_embeddings(len(tokenizer))
+
+    # Initialise the newly added placeholder token with the embeddings of the initializer token
+    token_embeds = text_encoder.get_input_embeddings().weight.data
+    token_embeds[placeholder_token_id] = embedding

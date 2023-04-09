@@ -35,9 +35,10 @@ def set_init_emb(init_emb_):
     init_emb = init_emb_
 
 
-def get_embedding_for_image():
-    # TODO
-    return init_emb
+def get_embedding_for_image(model, sample):
+    images = sample.images
+    steps = len(sample.embeddings)
+    return eval_model(images, model, steps, init_emb)
 
 
 def train(model, train_loader, eval_dataloader, args: TrainConfig):
@@ -49,7 +50,8 @@ def train(model, train_loader, eval_dataloader, args: TrainConfig):
         if args.validate_loss:
             eval_model_epoch(model, eval_dataloader, wandb)
         if (epoch + 1) % args.log_images_every_n_epochs == 0:
-            emb = get_embedding_for_image()
+            sample = eval_dataloader.dataset[0]
+            emb = get_embedding_for_image(model, sample)
             diffusion_generation.generate_images(emb, wandb)
 
 
