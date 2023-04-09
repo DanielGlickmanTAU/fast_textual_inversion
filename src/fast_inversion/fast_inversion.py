@@ -22,8 +22,8 @@ def train_step(model, images, embeddings, n_steps, teacher_force):
         else:
             x_emb = emb_predicted.detach().clone()
 
+        emb_predicted = model(images, x_emb, torch.tensor(step))
         emb_target = embeddings[step + 1]
-        emb_predicted = model(images, x_emb, step)
 
         loss = F.mse_loss(emb_predicted.float(), emb_target.float(), reduction="mean")
     # accelerator.clip_grad_norm_(model.parameters(), 1.0)
