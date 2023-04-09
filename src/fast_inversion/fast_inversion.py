@@ -5,6 +5,7 @@ import torch.nn.functional as F
 import torch
 
 from src.data.images_to_embedding_dataset import ImageEmbeddingInput
+from src.fast_inversion import diffusion_generation
 from src.fast_inversion.wandb_helper import init_wandb
 import tqdm
 
@@ -21,6 +22,7 @@ class TrainConfig:
     use_wandb: bool = False
 
     validate_loss: bool = True
+    log_images_every_n_epochs: int = 1
 
 
 init_emb = None
@@ -33,6 +35,11 @@ def set_init_emb(init_emb_):
     init_emb = init_emb_
 
 
+def get_embedding_for_image():
+    # TODO
+    return init_emb
+
+
 def train(model, train_loader, eval_dataloader, args: TrainConfig):
     model = model.to(device)
     wandb = init_wandb(args)
@@ -41,6 +48,9 @@ def train(model, train_loader, eval_dataloader, args: TrainConfig):
         train_epoch(model, train_loader, optimizer, wandb)
         if args.validate_loss:
             eval_model_epoch(model, eval_dataloader, wandb)
+        if (epoch + 1) % args.log_images_every_n_epochs == 0:
+            emb = get_embedding_for_image()
+            diffusion_generation.generate_images(emb, wandb)
 
 
 def train_epoch(model, data_loader, optimizer, wandb, teacher_force=True):

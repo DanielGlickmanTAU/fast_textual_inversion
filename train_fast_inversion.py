@@ -8,10 +8,8 @@ from src.fast_inversion.fast_inversion import train_epoch, train, TrainConfig
 
 from src.fast_inversion.fast_inversion_model import SimpleModel
 
-
-
 cfg = pyrallis.parse(config_class=TrainConfig)
-ds = ImagesEmbeddingDataset()
+ds = ImagesEmbeddingDataset(split='test')
 loader = ImagesEmbeddingDataloader(ds, batch_size=cfg.batch_size, shuffle=True)
 
 eval_ds = ImagesEmbeddingDataset(split='eval')
