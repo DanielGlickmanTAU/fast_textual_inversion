@@ -38,7 +38,7 @@ def set_init_emb(init_emb_):
 def get_embedding_for_image(model, sample):
     images = sample['images']
     steps = len(sample['embeddings'])
-    return eval_model(images, model, steps, init_emb)
+    return eval_model(images, model, steps, init_emb.unsqueeze(0))
 
 
 def train(model, train_loader, eval_dataloader, args: TrainConfig):
