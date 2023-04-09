@@ -21,7 +21,7 @@ class SimpleModel(torch.nn.Module):
 
     def forward(self, images, x_emb, step):
         bs = x_emb.shape[0]
-        timestep = self.step_embedding(step)
+        timestep = self.step_embedding(step.to(x_emb.device))
         emb_with_timestep = torch.cat((x_emb, timestep.expand(bs, -1)), dim=1)
         emb_update = self.embedding_update(emb_with_timestep)
 

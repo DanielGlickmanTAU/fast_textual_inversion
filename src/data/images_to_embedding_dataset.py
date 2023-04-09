@@ -130,6 +130,12 @@ class ImageEmbeddingInput(OrderedDict):
     def __len__(self):
         return len(self.images)
 
+    def to(self, device):
+        return ImageEmbeddingInput(images=self.images.to(device),
+                                   is_real=self.is_real.to(device),
+                                   embeddings=[emb.to(device) for emb in self.embeddings]
+                                   )
+
 
 def pad_images(seq, max_length):
     pad_image = torch.zeros_like(seq[0])

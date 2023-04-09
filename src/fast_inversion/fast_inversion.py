@@ -7,7 +7,11 @@ from src.data.images_to_embedding_dataset import ImageEmbeddingInput
 from src.fast_inversion.wandb_helper import init_wandb
 import tqdm
 
+from src.misc import compute
+
 init_emb = None
+
+device = compute.get_device()
 
 
 def set_init_emb(init_emb_):
@@ -16,6 +20,7 @@ def set_init_emb(init_emb_):
 
 
 def train(model, train_loader, eval_dataloader, args):
+    model = model.to(device)
     wandb = init_wandb(args)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
     for epoch in range(args.epochs):
@@ -32,6 +37,7 @@ def train_epoch(model, data_loader, optimizer, wandb, teacher_force=True):
 
 
 def train_step(model, input: ImageEmbeddingInput, optimizer, wandb, teacher_force):
+    input = input.to(device)
     images, embeddings, n_steps = input.images, input.embeddings, len(input.embeddings)
     stats = {}
     for step in range(n_steps - 1):
@@ -40,7 +46,7 @@ def train_step(model, input: ImageEmbeddingInput, optimizer, wandb, teacher_forc
         else:
             x_emb = emb_predicted.detach().clone()
 
-        emb_predicted = model(images, x_emb, torch.tensor(step))
+        emb_predicted = model(images, x_emb, torch.tensor(step, device=device))
         emb_target = embeddings[step + 1]
 
         loss = F.mse_loss(emb_predicted.float(), emb_target.float(), reduction="mean")
@@ -80,6 +86,6 @@ def eval_loss(model, input: ImageEmbeddingInput):
 @torch.no_grad()
 def eval_model(images, model, n_steps, x_emb):
     for step in range(n_steps - 1):
-        emb_predicted = model(images, x_emb, torch.tensor(step))
+        emb_predicted = model(images, x_emb, torch.tensor(step, device=device))
         x_emb = emb_predicted.detach().clone()
     return x_emb
