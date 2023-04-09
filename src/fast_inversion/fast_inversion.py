@@ -3,6 +3,7 @@ from collections import defaultdict
 import torch.nn.functional as F
 import torch
 
+from src.data.images_to_embedding_dataset import ImageEmbeddingInput
 from src.fast_inversion.wandb_helper import init_wandb
 import tqdm
 
@@ -18,12 +19,12 @@ def train_epoch(model, data_loader, optimizer, wandb, teacher_force=True):
     # images: (B,n, d) where n is num images
     # embeddings: (B,k,d) where k = 5000/n_steps
     for batch in tqdm.tqdm(data_loader):
-        n_steps = len(batch.embeddings)
         # todo: here encode images with clip etc
-        train_step(model, batch.images, batch.embeddings, n_steps, optimizer, wandb, teacher_force)
+        train_step(model, batch, optimizer, wandb, teacher_force)
 
 
-def train_step(model, images, embeddings, n_steps, optimizer, wandb, teacher_force):
+def train_step(model, input: ImageEmbeddingInput, optimizer, wandb, teacher_force):
+    images, embeddings, n_steps = input.images, input.embeddings, len(input.embeddings)
     stats = {}
     for step in range(n_steps - 1):
         if teacher_force or step == 0:
