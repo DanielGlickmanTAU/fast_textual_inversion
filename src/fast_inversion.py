@@ -2,6 +2,10 @@ import torch.nn.functional as F
 import torch
 
 
+def train(model, data_loader, args):
+    optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
+
+
 def train_epoch(model, data_loader, teacher_force=True):
     # images: (B,n, d) where n is num images
     # embeddings: (B,k,d) where k = 5000/n_steps
@@ -22,6 +26,10 @@ def train_step(model, images, embeddings, n_steps, teacher_force):
         emb_predicted = model(images, x_emb, step)
 
         loss = F.mse_loss(emb_predicted.float(), emb_target.float(), reduction="mean")
+    # accelerator.clip_grad_norm_(model.parameters(), 1.0)
+    # optimizer.step()
+    # lr_scheduler.step()
+    # optimizer.zero_grad()
 
 
 def eval(model, images, n_steps):
