@@ -38,6 +38,7 @@ def train(model, train_loader, eval_dataloader, args: TrainConfig):
             for i in range(args.num_persons_images_to_log):
                 sample = eval_dataloader.dataset[i]
                 emb = get_embedding_for_image(model, sample)
+                torch.cuda.empty_cache()
                 diffusion_generation.generate_images(emb, sample['path'], wandb, args)
 
 
