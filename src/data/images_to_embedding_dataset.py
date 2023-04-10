@@ -122,9 +122,9 @@ class ImagesEmbeddingDataset(Dataset):
         return torch.load(embd_path, map_location=torch.device('cpu'))['my_new_token']
 
     def download(self):
-        link = None
+        link = 'https://fast-inversion.s3.amazonaws.com/dataset_celebhq.zip'
         zip = 'dataset_celebhq.zip'
-        os.system(f'curl --get {none} >> {zip}')
+        os.system(f'curl --get {link} >> {zip}')
         extract_zip_to_path(link, self.base_dir)
 
 
