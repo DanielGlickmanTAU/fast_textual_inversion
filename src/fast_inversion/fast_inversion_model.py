@@ -13,9 +13,10 @@ device = compute.get_device()
 
 
 class SimpleModel(torch.nn.Module):
-    def __init__(self, num_steps):
+    def __init__(self, num_steps, image_encoder):
         # num_steps == len(dataset.steps)
         super().__init__()
+        self.image_encoder = image_encoder
         self.num_steps = num_steps
 
         self.embedding_step_dim = embedding_size // 2
@@ -35,6 +36,10 @@ class SimpleModel(torch.nn.Module):
         emb_update = self.embedding_update(emb_with_timestep)
 
         return emb_update + x_emb
+
+    @torch.no_grad()
+    def encode_images(self, images):
+        return self.image_encoder(images)
 
 
 def get_unet():
@@ -68,11 +73,20 @@ def get_clip_image():
         assert len(pixel_values_) == 1, f'len must be one, got {pixel_values_}'
         return torch.from_numpy(pixel_values_[0])
 
+    def _clip_image_wrapper(batched_images):
+        B, N, C, H, W = batched_images.shape
+        batched_images = batched_images.view(-1, C, H, W)
+        data = clip(batched_images)
+        hidden_state = data['last_hidden_state']
+        a, n, d = hidden_state.shape
+        return hidden_state.view(B, N, n, d)
+
     clip = CLIPVisionModel.from_pretrained("openai/clip-vit-large-patch14", cache_dir=cache_dir)
     processor = CLIPImageProcessor.from_pretrained("openai/clip-vit-large-patch14", cache_dir=cache_dir)
 
     clip.requires_grad_(False)
-    return clip.to(generation_device()), _image_processor_wrapper
+    clip = clip.to(generation_device())
+    return _clip_image_wrapper, _image_processor_wrapper
 
 
 def set_embedding_in_text_encoder(embedding, text_encoder, tokenizer):

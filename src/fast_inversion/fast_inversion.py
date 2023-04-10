@@ -26,7 +26,7 @@ def get_embedding_for_image(model, sample):
     return eval_model(images, model, steps, init_emb.unsqueeze(0))
 
 
-def train(model, clip_img, train_loader, eval_dataloader, args: TrainConfig):
+def train(model, train_loader, eval_dataloader, args: TrainConfig):
     model = model.to(device)
     wandb = init_wandb(args)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
@@ -48,6 +48,7 @@ def train_epoch(model, data_loader, optimizer, wandb, teacher_force=True):
     # images: (B,n, d) where n is num images
     # embeddings: (B,k,d) where k = 5000/n_steps
     for batch in tqdm.tqdm(data_loader):
+        encoded_images = model.encode_images(batch.images)
         train_step(model, batch, optimizer, wandb, teacher_force)
 
 
