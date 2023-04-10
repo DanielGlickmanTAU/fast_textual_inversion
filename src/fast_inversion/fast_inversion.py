@@ -77,6 +77,7 @@ def eval_model_epoch(model, loader, wandb):
     total_loss = 0
     total_items = 0
     for batch in loader:
+        batch = batch.to(device)
         loss = eval_loss(model, batch)
         n = len(batch)
         total_loss += loss.item() * n
@@ -97,6 +98,7 @@ def eval_loss(model, input: ImageEmbeddingInput):
 
 @torch.no_grad()
 def eval_model(images, model, n_steps, x_emb):
+    x_emb = x_emb.to(device)
     for step in range(n_steps - 1):
         emb_predicted = model(images, x_emb, torch.tensor(step, device=device))
         x_emb = emb_predicted.detach().clone()

@@ -2,15 +2,16 @@ import torch
 
 from src.fast_inversion.config import TrainConfig
 from src.fast_inversion.fast_inversion_model import get_clip_tokenizer, get_clip_text, get_vae, get_unet, \
-    set_embedding_in_text_encoder, get_diffusion_pipeline
+    set_embedding_in_text_encoder, get_diffusion_pipeline, placeholder_token
 from src.misc import compute
 import wandb
 
 num_inference_steps = 25
+
+
 # num_inference_steps = 10
-placeholder_token = 'my_new_token'
 
-
+@torch.no_grad()
 def generate_images(embedding, path, experiment, config: TrainConfig):
     # TODO:
     # make sure loading learned embedding into model... can look at others code..

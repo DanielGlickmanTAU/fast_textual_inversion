@@ -5,7 +5,9 @@ from transformers import CLIPTokenizer, CLIPTextModel
 
 embedding_size = 768
 diffusion_model_name = 'runwayml/stable-diffusion-v1-5'
+placeholder_token = 'my_new_token'
 cache_dir = compute.get_cache_dir()
+device = compute.get_device()
 
 
 class SimpleModel(torch.nn.Module):
@@ -35,21 +37,21 @@ class SimpleModel(torch.nn.Module):
 
 def get_unet():
     return UNet2DConditionModel.from_pretrained(
-        diffusion_model_name, cache_dir=cache_dir, subfolder="unet", )
+        diffusion_model_name, cache_dir=cache_dir, subfolder="unet", ).to(device)
 
 
 def get_vae():
-    return AutoencoderKL.from_pretrained(diffusion_model_name, cache_dir=cache_dir, subfolder="vae", )
+    return AutoencoderKL.from_pretrained(diffusion_model_name, cache_dir=cache_dir, subfolder="vae", ).to(device)
 
 
 def get_clip_text():
     return CLIPTextModel.from_pretrained(
-        diffusion_model_name, cache_dir=cache_dir, subfolder="text_encoder", )
+        diffusion_model_name, cache_dir=cache_dir, subfolder="text_encoder", ).to(device)
 
 
 def get_clip_tokenizer():
     return CLIPTokenizer.from_pretrained(diffusion_model_name, cache_dir=cache_dir,
-                                         subfolder="tokenizer")
+                                         subfolder="tokenizer").to(device)
 
 
 def set_embedding_in_text_encoder(embedding, text_encoder, tokenizer):
