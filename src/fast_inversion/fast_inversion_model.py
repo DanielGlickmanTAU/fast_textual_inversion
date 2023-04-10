@@ -1,3 +1,4 @@
+from src.fast_inversion.config import get_config
 from src.misc import compute
 import torch
 from diffusers import AutoencoderKL, UNet2DConditionModel, DiffusionPipeline, DPMSolverMultistepScheduler
@@ -37,16 +38,17 @@ class SimpleModel(torch.nn.Module):
 
 def get_unet():
     return UNet2DConditionModel.from_pretrained(
-        diffusion_model_name, cache_dir=cache_dir, subfolder="unet", ).to(device)
+        diffusion_model_name, cache_dir=cache_dir, subfolder="unet", ).to(generation_device())
 
 
 def get_vae():
-    return AutoencoderKL.from_pretrained(diffusion_model_name, cache_dir=cache_dir, subfolder="vae", ).to(device)
+    return AutoencoderKL.from_pretrained(diffusion_model_name, cache_dir=cache_dir, subfolder="vae", ).to(
+        generation_device())
 
 
 def get_clip_text():
     return CLIPTextModel.from_pretrained(
-        diffusion_model_name, cache_dir=cache_dir, subfolder="text_encoder", ).to(device)
+        diffusion_model_name, cache_dir=cache_dir, subfolder="text_encoder", ).to(generation_device())
 
 
 def get_clip_tokenizer():
@@ -81,3 +83,8 @@ def get_diffusion_pipeline(text_encoder, tokenizer, unet, vae):
     pipeline.set_progress_bar_config(disable=True)
     pipeline.safety_checker = None
     return pipeline
+
+
+def generation_device():
+    cfg = get_config()
+    return 'cpu' if cfg.validate_images_on_cpu else device

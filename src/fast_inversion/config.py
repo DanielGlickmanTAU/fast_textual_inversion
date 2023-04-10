@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+cfg = None
+
 
 @dataclass
 class TrainConfig:
@@ -14,3 +16,13 @@ class TrainConfig:
     log_images_every_n_epochs: int = 1
     num_persons_images_to_log: int = 1
     num_images_per_person_to_log: int = 2
+    validate_images_on_cpu: bool = False
+
+
+def set_config(cfg_):
+    global cfg
+    cfg = cfg_
+
+
+def get_config() -> TrainConfig:
+    return cfg
