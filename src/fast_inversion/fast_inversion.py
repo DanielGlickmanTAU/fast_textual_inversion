@@ -37,7 +37,7 @@ def train(model, train_loader, eval_dataloader, args: TrainConfig):
             for i in range(args.num_persons_images_to_log):
                 sample = eval_dataloader.dataset[i]
                 emb = get_embedding_for_image(model, sample)
-                diffusion_generation.generate_images(emb, wandb, args)
+                diffusion_generation.generate_images(emb, sample['path'], wandb, args)
 
 
 def train_epoch(model, data_loader, optimizer, wandb, teacher_force=True):

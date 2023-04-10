@@ -13,7 +13,7 @@ placeholder_token = 'my_new_token'
 cache_dir = compute.get_cache_dir()
 
 
-def generate_images(embedding, experiment, config: TrainConfig):
+def generate_images(embedding, path, experiment, config: TrainConfig):
     # TODO:
     # make sure loading learned embedding into model... can look at others code..
     # probably should overwrite pipeline to use my own embeddings with fast embedder
@@ -50,7 +50,7 @@ def generate_images(embedding, experiment, config: TrainConfig):
     experiment.log(
         {
             "validation": [
-                wandb.Image(image, caption=f"{i}: {validation_prompt}")
+                wandb.Image(image, caption=f"path: {path}. {i}: {validation_prompt}")
                 for i, image in enumerate(images)
             ]
         })
