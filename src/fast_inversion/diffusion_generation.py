@@ -2,18 +2,18 @@ import torch
 from diffusers import AutoencoderKL, UNet2DConditionModel, DiffusionPipeline, DPMSolverMultistepScheduler
 from transformers import CLIPTokenizer, CLIPTextModel
 
+from src.fast_inversion.config import TrainConfig
 from src.misc import compute
 import wandb
 
 diffusion_model_name = 'runwayml/stable-diffusion-v1-5'
-num_validation_images = 2
-# num_inference_steps = 25
-num_inference_steps = 10
+num_inference_steps = 25
+# num_inference_steps = 10
 placeholder_token = 'my_new_token'
 cache_dir = compute.get_cache_dir()
 
 
-def generate_images(embedding, experiment):
+def generate_images(embedding, experiment, config: TrainConfig):
     # TODO:
     # make sure loading learned embedding into model... can look at others code..
     # probably should overwrite pipeline to use my own embeddings with fast embedder
@@ -45,7 +45,7 @@ def generate_images(embedding, experiment):
     pipeline.set_progress_bar_config(disable=True)
     pipeline.safety_checker = None
 
-    prompt = num_validation_images * [validation_prompt]
+    prompt = config.num_images_per_person_to_log * [validation_prompt]
     images = pipeline(prompt, num_inference_steps=num_inference_steps).images
     experiment.log(
         {

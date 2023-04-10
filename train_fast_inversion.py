@@ -4,7 +4,8 @@ import pyrallis
 
 from src.data.images_to_embedding_dataset import ImagesEmbeddingDataset, ImagesEmbeddingDataloader
 from src.fast_inversion import fast_inversion
-from src.fast_inversion.fast_inversion import train_epoch, train, TrainConfig
+from src.fast_inversion.fast_inversion import train_epoch, train
+from src.fast_inversion.config import TrainConfig
 
 from src.fast_inversion.fast_inversion_model import SimpleModel
 

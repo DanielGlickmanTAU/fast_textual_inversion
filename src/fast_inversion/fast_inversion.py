@@ -1,29 +1,13 @@
-from collections import defaultdict
-from dataclasses import dataclass
-
 import torch.nn.functional as F
 import torch
 
 from src.data.images_to_embedding_dataset import ImageEmbeddingInput
 from src.fast_inversion import diffusion_generation
+from src.fast_inversion.config import TrainConfig
 from src.fast_inversion.wandb_helper import init_wandb
 import tqdm
 
 from src.misc import compute
-
-
-@dataclass
-class TrainConfig:
-    batch_size: int = 32
-    learning_rate: float = 3e-4
-    epochs: int = 100
-
-    exp_name: str = 'fast_inversion_train'
-    use_wandb: bool = False
-
-    validate_loss: bool = True
-    log_images_every_n_epochs: int = 1
-
 
 init_emb = None
 
@@ -50,9 +34,10 @@ def train(model, train_loader, eval_dataloader, args: TrainConfig):
         if args.validate_loss:
             eval_model_epoch(model, eval_dataloader, wandb)
         if (epoch + 1) % args.log_images_every_n_epochs == 0:
-            sample = eval_dataloader.dataset[0]
-            emb = get_embedding_for_image(model, sample)
-            diffusion_generation.generate_images(emb, wandb)
+            for i in range(args.num_persons_images_to_log):
+                sample = eval_dataloader.dataset[i]
+                emb = get_embedding_for_image(model, sample)
+                diffusion_generation.generate_images(emb, wandb, args)
 
 
 def train_epoch(model, data_loader, optimizer, wandb, teacher_force=True):
