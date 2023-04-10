@@ -51,7 +51,7 @@ def get_clip_text():
 
 def get_clip_tokenizer():
     return CLIPTokenizer.from_pretrained(diffusion_model_name, cache_dir=cache_dir,
-                                         subfolder="tokenizer").to(device)
+                                         subfolder="tokenizer")
 
 
 def set_embedding_in_text_encoder(embedding, text_encoder, tokenizer):
