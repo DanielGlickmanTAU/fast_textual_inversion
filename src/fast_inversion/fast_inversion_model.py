@@ -37,18 +37,21 @@ class SimpleModel(torch.nn.Module):
 
 
 def get_unet():
-    return UNet2DConditionModel.from_pretrained(
-        diffusion_model_name, cache_dir=cache_dir, subfolder="unet", ).to(generation_device())
+    unet = UNet2DConditionModel.from_pretrained(diffusion_model_name, cache_dir=cache_dir, subfolder="unet", )
+    unet.requires_grad_(False)
+    return unet.to(generation_device())
 
 
 def get_vae():
-    return AutoencoderKL.from_pretrained(diffusion_model_name, cache_dir=cache_dir, subfolder="vae", ).to(
-        generation_device())
+    vae = AutoencoderKL.from_pretrained(diffusion_model_name, cache_dir=cache_dir, subfolder="vae", )
+    vae.requires_grad_(False)
+    return vae.to(generation_device())
 
 
 def get_clip_text():
-    return CLIPTextModel.from_pretrained(
-        diffusion_model_name, cache_dir=cache_dir, subfolder="text_encoder", ).to(generation_device())
+    clip = CLIPTextModel.from_pretrained(diffusion_model_name, cache_dir=cache_dir, subfolder="text_encoder", )
+    clip.requires_grad_(False)
+    return clip.to(generation_device())
 
 
 def get_clip_tokenizer():
