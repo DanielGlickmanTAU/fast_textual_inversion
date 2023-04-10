@@ -30,6 +30,7 @@ def train(model, train_loader, eval_dataloader, args: TrainConfig):
     wandb = init_wandb(args)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
     for epoch in range(args.epochs):
+        wandb.log({'epoch': epoch})
         train_epoch(model, train_loader, optimizer, wandb)
         if args.validate_loss:
             eval_model_epoch(model, eval_dataloader, wandb)
