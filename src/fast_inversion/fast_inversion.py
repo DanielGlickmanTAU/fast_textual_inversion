@@ -4,6 +4,7 @@ import torch
 from src.data.images_to_embedding_dataset import ImageEmbeddingInput
 from src.fast_inversion import diffusion_generation
 from src.fast_inversion.config import TrainConfig
+from src.fast_inversion.fast_inversion_model import get_clip_image
 from src.fast_inversion.wandb_helper import init_wandb
 import tqdm
 
@@ -25,12 +26,13 @@ def get_embedding_for_image(model, sample):
     return eval_model(images, model, steps, init_emb.unsqueeze(0))
 
 
-def train(model, train_loader, eval_dataloader, args: TrainConfig):
+def train(model, clip_img, train_loader, eval_dataloader, args: TrainConfig):
     model = model.to(device)
     wandb = init_wandb(args)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
     for epoch in range(args.epochs):
-        wandb.log({'epoch': epoch})
+        if wandb:
+            wandb.log({'epoch': epoch})
         train_epoch(model, train_loader, optimizer, wandb)
         if args.validate_loss:
             eval_model_epoch(model, eval_dataloader, wandb)
@@ -46,7 +48,6 @@ def train_epoch(model, data_loader, optimizer, wandb, teacher_force=True):
     # images: (B,n, d) where n is num images
     # embeddings: (B,k,d) where k = 5000/n_steps
     for batch in tqdm.tqdm(data_loader):
-        # todo: here encode images with clip etc
         train_step(model, batch, optimizer, wandb, teacher_force)
 
 

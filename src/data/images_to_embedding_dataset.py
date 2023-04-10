@@ -48,9 +48,11 @@ def embedding_bin_file_path_to_tensor(path):
 
 
 class ImagesEmbeddingDataset(Dataset):
-    def __init__(self, split='train', base_dir='celebhq_dataset/', image_size=512, flip_p=0.5, steps=None,
+    def __init__(self, image_processor, split='train', base_dir='celebhq_dataset/', image_size=512, flip_p=0.5,
+                 steps=None,
                  download=False):
         assert split in ['train', 'eval', 'test']
+        self.image_processor = image_processor
         self.image_size = image_size
         self.base_dir = base_dir
         if download:
@@ -82,6 +84,7 @@ class ImagesEmbeddingDataset(Dataset):
     def __getitem__(self, index):
         path = self.paths[index]
         images = [self.load_image(image_path) for image_path in self.get_images_path(path)]
+
         embeddings = [self.load_embedding(embd_path) for embd_path in self.get_embeddings(path)]
 
         return {'images': images, 'path': path, 'embeddings': embeddings}
@@ -99,20 +102,21 @@ class ImagesEmbeddingDataset(Dataset):
 
     def load_image(self, image_path):
         image = Image.open(image_path)
-        if not image.mode == "RGB":
-            image = image.convert("RGB")
-
-        # default to score-sde preprocessing
-        img = np.array(image).astype(np.uint8)
-
-        image = Image.fromarray(img)
-        image = image.resize((self.image_size, self.image_size), resample=PIL.Image.Resampling.BICUBIC)
-
-        image = self.flip_transform(image)
-        image = np.array(image).astype(np.uint8)
-        image = (image / 127.5 - 1.0).astype(np.float32)
-
-        return torch.from_numpy(image).permute(2, 0, 1)
+        return self.image_processor(image)
+        # if not image.mode == "RGB":
+        #     image = image.convert("RGB")
+        #
+        # # default to score-sde preprocessing
+        # img = np.array(image).astype(np.uint8)
+        #
+        # image = Image.fromarray(img)
+        # image = image.resize((self.image_size, self.image_size), resample=PIL.Image.Resampling.BICUBIC)
+        #
+        # image = self.flip_transform(image)
+        # image = np.array(image).astype(np.uint8)
+        # image = (image / 127.5 - 1.0).astype(np.float32)
+        #
+        # return torch.from_numpy(image).permute(2, 0, 1)
 
     def get_embeddings(self, instance_dir):
         embeddings_dir = os.path.join(instance_dir, 'embeddings')

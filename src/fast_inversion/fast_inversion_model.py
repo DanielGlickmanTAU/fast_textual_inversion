@@ -2,7 +2,7 @@ from src.fast_inversion.config import get_config
 from src.misc import compute
 import torch
 from diffusers import AutoencoderKL, UNet2DConditionModel, DiffusionPipeline, DPMSolverMultistepScheduler
-from transformers import CLIPTokenizer, CLIPTextModel
+from transformers import CLIPTokenizer, CLIPTextModel, CLIPVisionModel, CLIPProcessor, CLIPImageProcessor, CLIPModel
 from diffusers.utils.import_utils import is_xformers_available
 
 embedding_size = 768
@@ -60,6 +60,19 @@ def get_clip_text():
 def get_clip_tokenizer():
     return CLIPTokenizer.from_pretrained(diffusion_model_name, cache_dir=cache_dir,
                                          subfolder="tokenizer")
+
+
+def get_clip_image():
+    def _image_processor_wrapper(image):
+        pixel_values_ = processor(image)['pixel_values']
+        assert len(pixel_values_) == 1, f'len must be one, got {pixel_values_}'
+        return torch.from_numpy(pixel_values_[0])
+
+    clip = CLIPVisionModel.from_pretrained("openai/clip-vit-large-patch14", cache_dir=cache_dir)
+    processor = CLIPImageProcessor.from_pretrained("openai/clip-vit-large-patch14", cache_dir=cache_dir)
+
+    clip.requires_grad_(False)
+    return clip.to(generation_device()), _image_processor_wrapper
 
 
 def set_embedding_in_text_encoder(embedding, text_encoder, tokenizer):
