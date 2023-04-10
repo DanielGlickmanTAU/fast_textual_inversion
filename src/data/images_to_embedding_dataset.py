@@ -125,7 +125,7 @@ class ImagesEmbeddingDataset(Dataset):
         link = 'https://fast-inversion.s3.amazonaws.com/dataset_celebhq.zip'
         zip = 'dataset_celebhq.zip'
         os.system(f'curl --get {link} >> {zip}')
-        extract_zip_to_path(link, self.base_dir)
+        extract_zip_to_path(zip, self.base_dir)
 
 
 @dataclasses.dataclass
