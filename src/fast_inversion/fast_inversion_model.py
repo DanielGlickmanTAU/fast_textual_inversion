@@ -3,6 +3,7 @@ from src.misc import compute
 import torch
 from diffusers import AutoencoderKL, UNet2DConditionModel, DiffusionPipeline, DPMSolverMultistepScheduler
 from transformers import CLIPTokenizer, CLIPTextModel
+from diffusers.utils.import_utils import is_xformers_available
 
 embedding_size = 768
 diffusion_model_name = 'runwayml/stable-diffusion-v1-5'
@@ -39,6 +40,8 @@ class SimpleModel(torch.nn.Module):
 def get_unet():
     unet = UNet2DConditionModel.from_pretrained(diffusion_model_name, cache_dir=cache_dir, subfolder="unet", )
     unet.requires_grad_(False)
+    if is_xformers_available():
+        unet.enable_xformers_memory_efficient_attention()
     return unet.to(generation_device())
 
 
