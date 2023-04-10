@@ -1,6 +1,11 @@
+from src.misc import compute
 import torch
+from diffusers import AutoencoderKL, UNet2DConditionModel, DiffusionPipeline, DPMSolverMultistepScheduler
+from transformers import CLIPTokenizer, CLIPTextModel
 
 embedding_size = 768
+diffusion_model_name = 'runwayml/stable-diffusion-v1-5'
+cache_dir = compute.get_cache_dir()
 
 
 class SimpleModel(torch.nn.Module):
@@ -26,3 +31,51 @@ class SimpleModel(torch.nn.Module):
         emb_update = self.embedding_update(emb_with_timestep)
 
         return emb_update + x_emb
+
+
+def get_unet():
+    return UNet2DConditionModel.from_pretrained(
+        diffusion_model_name, cache_dir=cache_dir, subfolder="unet", )
+
+
+def get_vae():
+    return AutoencoderKL.from_pretrained(diffusion_model_name, cache_dir=cache_dir, subfolder="vae", )
+
+
+def get_clip_text():
+    return CLIPTextModel.from_pretrained(
+        diffusion_model_name, cache_dir=cache_dir, subfolder="text_encoder", )
+
+
+def get_clip_tokenizer():
+    return CLIPTokenizer.from_pretrained(diffusion_model_name, cache_dir=cache_dir,
+                                         subfolder="tokenizer")
+
+
+def set_embedding_in_text_encoder(embedding, text_encoder, tokenizer):
+    num_added_tokens = tokenizer.add_tokens(placeholder_token)
+    assert num_added_tokens == 1
+
+    placeholder_token_id = tokenizer.convert_tokens_to_ids(placeholder_token)
+
+    # Resize the token embeddings as we are adding new special tokens to the tokenizer
+    text_encoder.resize_token_embeddings(len(tokenizer))
+
+    # Initialise the newly added placeholder token with the embeddings of the initializer token
+    token_embeds = text_encoder.get_input_embeddings().weight.data
+    token_embeds[placeholder_token_id] = embedding
+
+
+def get_diffusion_pipeline(text_encoder, tokenizer, unet, vae):
+    pipeline = DiffusionPipeline.from_pretrained(
+        diffusion_model_name, cache_dir=cache_dir,
+        text_encoder=text_encoder,
+        unet=unet,
+        vae=vae,
+        tokenizer=tokenizer,
+
+    )
+    pipeline.scheduler = DPMSolverMultistepScheduler.from_config(pipeline.scheduler.config)
+    pipeline.set_progress_bar_config(disable=True)
+    pipeline.safety_checker = None
+    return pipeline
