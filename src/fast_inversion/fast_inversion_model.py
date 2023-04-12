@@ -133,7 +133,7 @@ def get_clip_image():
     processor = CLIPImageProcessor.from_pretrained("openai/clip-vit-large-patch14", cache_dir=cache_dir)
 
     clip.requires_grad_(False)
-    clip = clip.to(generation_device())
+    clip = clip.to(device)
     return _clip_image_wrapper, _image_processor_wrapper
 
 
