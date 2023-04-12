@@ -34,7 +34,6 @@ def s3_zip_and_upload(output_dir, zipname):
             for file in files:
                 ziph.write(os.path.join(root, file), arcname=file)
 
-    s3 = boto3.client('s3')
     # always end with .zip
     zipname = zipname.replace('.zip', '') + '.zip'
 
@@ -42,9 +41,14 @@ def s3_zip_and_upload(output_dir, zipname):
     zipdir(output_dir, zipf)
     zipf.close()
 
+    s3_upload(zipname)
+
+
+def s3_upload(filename):
+    s3 = boto3.client('s3')
     # Upload the zip file to Amazon S3
-    with open(zipname, 'rb') as data:
-        s3.upload_fileobj(data, 'fast-inversion', zipname)
+    with open(filename, 'rb') as data:
+        s3.upload_fileobj(data, 'fast-inversion', filename)
 
 
 def get_all_keys_with_prefix(bucket_name='fast-inversion', objects_name_prefix='celeb', s3=boto3.client('s3')):
