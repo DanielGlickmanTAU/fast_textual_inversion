@@ -48,21 +48,22 @@ def train_epoch(model, data_loader, optimizer, wandb, teacher_force=True):
     # images: (B,n, d) where n is num images
     # embeddings: (B,k,d) where k = 5000/n_steps
     for batch in tqdm.tqdm(data_loader):
-        encoded_images = model.encode_images(batch.images)
         train_step(model, batch, optimizer, wandb, teacher_force)
 
 
 def train_step(model, input: ImageEmbeddingInput, optimizer, wandb, teacher_force):
+    stats = {}
+
     input = input.to(device)
     images, embeddings, n_steps = input.images, input.embeddings, len(input.embeddings)
-    stats = {}
+    encoded_images = model.encode_images(images)
     for step in range(n_steps - 1):
         if teacher_force or step == 0:
             x_emb = embeddings[step]
         else:
             x_emb = emb_predicted.detach().clone()
 
-        emb_predicted = model(images, x_emb, torch.tensor(step, device=device))
+        emb_predicted = model(encoded_images, x_emb, torch.tensor(step, device=device))
         emb_target = embeddings[step + 1]
 
         loss = F.mse_loss(emb_predicted.float(), emb_target.float(), reduction="mean")

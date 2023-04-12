@@ -1,3 +1,5 @@
+from torch import nn
+
 from src.fast_inversion.config import get_config
 from src.misc import compute
 import torch
@@ -6,6 +8,7 @@ from transformers import CLIPTokenizer, CLIPTextModel, CLIPVisionModel, CLIPProc
 from diffusers.utils.import_utils import is_xformers_available
 
 embedding_size = 768
+clip_output_size = 1024
 diffusion_model_name = 'runwayml/stable-diffusion-v1-5'
 placeholder_token = 'my_new_token'
 cache_dir = compute.get_cache_dir()
@@ -21,16 +24,77 @@ class SimpleModel(torch.nn.Module):
 
         self.embedding_step_dim = embedding_size // 2
         self.step_embedding = torch.nn.Embedding(num_steps, self.embedding_step_dim)
+        self.embedding_step_with_timestep_dim = embedding_size + self.embedding_step_dim
         self.embedding_update = torch.nn.Sequential(
-            torch.nn.Linear(embedding_size + self.embedding_step_dim,
-                            (embedding_size + self.embedding_step_dim) // 2),
+            torch.nn.Linear(self.embedding_step_with_timestep_dim,
+                            (self.embedding_step_with_timestep_dim) // 2),
             torch.nn.ReLU(),
-            torch.nn.Linear((embedding_size + self.embedding_step_dim) // 2, embedding_size)
+            torch.nn.Linear((self.embedding_step_with_timestep_dim) // 2, embedding_size)
 
         )
 
     def forward(self, images, x_emb, step):
         bs = x_emb.shape[0]
+        timestep = self.step_embedding(step.to(x_emb.device))
+        emb_with_timestep = torch.cat((x_emb, timestep.expand(bs, -1)), dim=1)
+        emb_update = self.embedding_update(emb_with_timestep)
+
+        return emb_update + x_emb
+
+    @torch.no_grad()
+    def encode_images(self, images):
+        return images
+
+
+class SimpleCrossAttentionModel(torch.nn.Module):
+    def __init__(self, num_steps, image_encoder):
+        # num_steps == len(dataset.steps)
+        super().__init__()
+        self.image_encoder = image_encoder
+        self.num_steps = num_steps
+
+        # self.embedding_step_dim = embedding_size // 2
+        self.embedding_step_dim = 256
+
+        self.step_embedding = torch.nn.Embedding(num_steps, self.embedding_step_dim)
+        self.embedding_step_with_timestep_dim = embedding_size + self.embedding_step_dim
+        self.embedding_update = torch.nn.Sequential(
+            torch.nn.Linear(self.embedding_step_with_timestep_dim,
+                            (self.embedding_step_with_timestep_dim) // 2),
+            torch.nn.ReLU(),
+            torch.nn.Linear((self.embedding_step_with_timestep_dim) // 2, embedding_size)
+
+        )
+
+        self.attn = torch.nn.MultiheadAttention(embed_dim=self.embedding_step_with_timestep_dim, kdim=clip_output_size,
+                                                vdim=clip_output_size,
+                                                num_heads=4, batch_first=True)
+
+    def forward(self, images, x_emb, step):
+        bs = x_emb.shape[0]
+        timestep = self.step_embedding(step.to(x_emb.device))
+        emb_with_timestep = torch.cat((x_emb, timestep.expand(bs, -1)), dim=1)
+
+        emb_new, attn = self.attn(emb_with_timestep.unsqueeze(1), images, images, need_weights=False)
+        emb_new = emb_new.squeeze(1)
+
+        emb_new = emb_new + emb_with_timestep
+
+        emb_update = self.embedding_update(emb_new)
+
+        return emb_update + x_emb
+
+    @torch.no_grad()
+    def encode_images(self, images):
+        return images
+
+    def forward(self, images, x_emb, step):
+        # todo: batch first??
+        cross_attention = nn.MultiheadAttention(embed_dim=embedding_size, num_heads=4, batch_first=True)
+
+        bs = x_emb.shape[0]
+        # "concat" all patches from different images together.
+        images.view(bs, -1, images.shape[-1])
         timestep = self.step_embedding(step.to(x_emb.device))
         emb_with_timestep = torch.cat((x_emb, timestep.expand(bs, -1)), dim=1)
         emb_update = self.embedding_update(emb_with_timestep)
