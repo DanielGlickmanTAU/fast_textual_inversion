@@ -75,29 +75,13 @@ class SimpleCrossAttentionModel(torch.nn.Module):
         timestep = self.step_embedding(step.to(x_emb.device))
         emb_with_timestep = torch.cat((x_emb, timestep.expand(bs, -1)), dim=1)
 
+        images = images.view(bs, -1, images.shape[-1])
         emb_new, attn = self.attn(emb_with_timestep.unsqueeze(1), images, images, need_weights=False)
         emb_new = emb_new.squeeze(1)
 
         emb_new = emb_new + emb_with_timestep
 
         emb_update = self.embedding_update(emb_new)
-
-        return emb_update + x_emb
-
-    @torch.no_grad()
-    def encode_images(self, images):
-        return images
-
-    def forward(self, images, x_emb, step):
-        # todo: batch first??
-        cross_attention = nn.MultiheadAttention(embed_dim=embedding_size, num_heads=4, batch_first=True)
-
-        bs = x_emb.shape[0]
-        # "concat" all patches from different images together.
-        images.view(bs, -1, images.shape[-1])
-        timestep = self.step_embedding(step.to(x_emb.device))
-        emb_with_timestep = torch.cat((x_emb, timestep.expand(bs, -1)), dim=1)
-        emb_update = self.embedding_update(emb_with_timestep)
 
         return emb_update + x_emb
 
