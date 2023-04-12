@@ -28,7 +28,7 @@ import os
 import zipfile
 
 
-def s3_upload(output_dir, zipname):
+def s3_zip_and_upload(output_dir, zipname):
     def zipdir(path, ziph):
         for root, dirs, files in os.walk(path):
             for file in files:
