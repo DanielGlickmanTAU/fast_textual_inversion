@@ -105,6 +105,7 @@ def eval_loss(model, input: ImageEmbeddingInput):
 @torch.no_grad()
 def eval_model(images, model, n_steps, x_emb):
     x_emb = x_emb.to(device)
+    images = images.to(device)
     encoded_images = model.encode_images(images)
     for step in range(n_steps - 1):
         emb_predicted = model(encoded_images, x_emb, torch.tensor(step, device=device))

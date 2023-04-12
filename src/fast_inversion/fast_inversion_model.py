@@ -93,8 +93,8 @@ class SimpleCrossAttentionModel(torch.nn.Module):
 def get_unet():
     unet = UNet2DConditionModel.from_pretrained(diffusion_model_name, cache_dir=cache_dir, subfolder="unet", )
     unet.requires_grad_(False)
-    if torch.cuda.is_available() and is_xformers_available():
-        unet.enable_xformers_memory_efficient_attention()
+    # if torch.cuda.is_available() and is_xformers_available():
+    #     unet.enable_xformers_memory_efficient_attention()
     return unet.to(generation_device())
 
 
@@ -140,6 +140,7 @@ def get_clip_image():
 def set_embedding_in_text_encoder(embedding, text_encoder, tokenizer):
     num_added_tokens = tokenizer.add_tokens(placeholder_token)
     assert num_added_tokens == 1
+    embedding = embedding.to(text_encoder.device)
 
     placeholder_token_id = tokenizer.convert_tokens_to_ids(placeholder_token)
 

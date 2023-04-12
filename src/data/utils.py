@@ -44,11 +44,18 @@ def s3_zip_and_upload(output_dir, zipname):
     s3_upload(zipname)
 
 
-def s3_upload(filename):
+def s3_upload(filename, print_progress=False):
+    c = [0]
+
+    def progress(bytes_transferred):
+        if print_progress:
+            c[0] = c[0] + 1
+            print(f'{bytes_transferred * c[0]} bytes transferred')
+
     s3 = boto3.client('s3')
     # Upload the zip file to Amazon S3
     with open(filename, 'rb') as data:
-        s3.upload_fileobj(data, 'fast-inversion', filename)
+        s3.upload_fileobj(data, 'fast-inversion', filename, Callback=progress)
 
 
 def get_all_keys_with_prefix(bucket_name='fast-inversion', objects_name_prefix='celeb', s3=boto3.client('s3')):
