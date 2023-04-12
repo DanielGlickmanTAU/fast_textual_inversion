@@ -1,6 +1,7 @@
 import dataclasses
 import json
 import os
+import random
 import re
 from collections import OrderedDict
 from typing import List
@@ -168,19 +169,23 @@ def batch_embeddings(batch):
     return embeddings
 
 
-# Custom collate function
-def custom_collate(batch):
-    max_length = max([len(item['images']) for item in batch])
-    padded_input = [pad_images(item['images'], max_length) for item in batch]
-    padded_image, is_real = zip(*padded_input)
-    padded_images = torch.stack(padded_image)
-    is_real = torch.stack(is_real)
-
-    embeddings_to_step = batch_embeddings(batch)
-    # return {'images': padded_images, 'is_real': is_real, 'embeddings': embeddings_to_step}
-    return ImageEmbeddingInput(padded_images, is_real, embeddings_to_step)
-
-
 class ImagesEmbeddingDataloader(torch.utils.data.DataLoader):
-    def __init__(self, *args, **kwargs):
-        super(ImagesEmbeddingDataloader, self).__init__(collate_fn=custom_collate, *args, **kwargs)
+    def __init__(self, ds, max_images_per_instance=999, *args, **kwargs):
+        super(ImagesEmbeddingDataloader, self).__init__(ds, collate_fn=self.custom_collate, *args,
+                                                        **kwargs)
+        self.max_images_per_instance = max_images_per_instance
+
+    # Custom collate function
+    def custom_collate(self, batch):
+        images_list = [item['images'] for item in batch]
+        images_list = [images if len(images) <= self.max_images_per_instance
+                       else random.sample(images, self.max_images_per_instance)
+                       for images in images_list]
+        max_length = max([len(images) for images in images_list])
+        padded_input = [pad_images(images, max_length) for images in images_list]
+        padded_image, is_real = zip(*padded_input)
+        padded_images = torch.stack(padded_image)
+        is_real = torch.stack(is_real)
+
+        embeddings_to_step = batch_embeddings(batch)
+        return ImageEmbeddingInput(padded_images, is_real, embeddings_to_step)

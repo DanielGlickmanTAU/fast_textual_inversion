@@ -15,10 +15,12 @@ set_config(cfg)
 
 img_clip, img_processor = get_clip_image()
 ds = ImagesEmbeddingDataset(split='train', download=False, image_processor=img_processor)
-loader = ImagesEmbeddingDataloader(ds, batch_size=cfg.batch_size, shuffle=True)
+loader = ImagesEmbeddingDataloader(ds, max_images_per_instance=cfg.max_images_per_instance, batch_size=cfg.batch_size,
+                                   shuffle=True)
 
 eval_ds = ImagesEmbeddingDataset(split='eval', image_processor=img_processor)
-eval_loader = ImagesEmbeddingDataloader(eval_ds, batch_size=cfg.batch_size * 2)
+eval_loader = ImagesEmbeddingDataloader(eval_ds, max_images_per_instance=cfg.max_images_per_instance,
+                                        batch_size=cfg.batch_size * 2)
 
 if cfg.model_type == 'simple':
     model = SimpleModel(len(ds.steps), img_clip)

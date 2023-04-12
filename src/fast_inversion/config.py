@@ -9,6 +9,7 @@ class TrainConfig:
     batch_size: int = 32
     learning_rate: float = 3e-4
     epochs: int = 100
+    max_images_per_instance: int = 100
 
     # experiment config
     exp_name: str = 'fast_inversion_train'
@@ -21,7 +22,7 @@ class TrainConfig:
     validate_images_on_cpu: bool = False
 
     # model config
-    model_type: str = 'simple' #simplecorss
+    model_type: str = 'simple'  # simplecorss
 
 
 def set_config(cfg_):
