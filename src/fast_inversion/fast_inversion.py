@@ -36,7 +36,7 @@ def train(model, train_loader, eval_dataloader, args: TrainConfig):
         train_epoch(model, train_loader, optimizer, wandb)
         if args.validate_loss:
             eval_model_epoch(model, eval_dataloader, wandb)
-        if (epoch + 1) % args.log_images_every_n_epochs == 0:
+        if (epoch + 1) % args.log_images_every_n_epochs == 0 and wandb:
             for i in range(args.num_persons_images_to_log):
                 sample = eval_dataloader.dataset[i]
                 emb = get_embedding_for_image(model, sample)
@@ -88,7 +88,8 @@ def eval_model_epoch(model, loader, wandb):
         total_loss += loss.item() * n
         total_items += n
     total_loss = total_loss / total_items
-    wandb.log({'eval_final_loss': total_loss})
+    if wandb:
+        wandb.log({'eval_final_loss': total_loss})
 
 
 def eval_loss(model, input: ImageEmbeddingInput):
