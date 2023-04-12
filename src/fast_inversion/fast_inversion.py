@@ -21,7 +21,7 @@ def set_init_emb(init_emb_):
 
 
 def get_embedding_for_image(model, sample):
-    images = sample['images']
+    images = torch.stack(sample['images']).unsqueeze(0)
     steps = len(sample['embeddings'])
     return eval_model(images, model, steps, init_emb.unsqueeze(0))
 
@@ -104,7 +104,8 @@ def eval_loss(model, input: ImageEmbeddingInput):
 @torch.no_grad()
 def eval_model(images, model, n_steps, x_emb):
     x_emb = x_emb.to(device)
+    encoded_images = model.encode_images(images)
     for step in range(n_steps - 1):
-        emb_predicted = model(images, x_emb, torch.tensor(step, device=device))
+        emb_predicted = model(encoded_images, x_emb, torch.tensor(step, device=device))
         x_emb = emb_predicted.detach().clone()
     return x_emb

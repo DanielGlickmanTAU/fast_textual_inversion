@@ -93,7 +93,7 @@ class SimpleCrossAttentionModel(torch.nn.Module):
 def get_unet():
     unet = UNet2DConditionModel.from_pretrained(diffusion_model_name, cache_dir=cache_dir, subfolder="unet", )
     unet.requires_grad_(False)
-    if is_xformers_available():
+    if torch.cuda.is_available() and is_xformers_available():
         unet.enable_xformers_memory_efficient_attention()
     return unet.to(generation_device())
 
