@@ -47,9 +47,11 @@ class SimpleModel(torch.nn.Module):
 
 
 class SimpleCrossAttentionModel(torch.nn.Module):
-    def __init__(self, num_steps, image_encoder, step_time_scale=False, embedding_hidden_multiplier=0.5):
+    def __init__(self, num_steps, image_encoder, step_time_scale=False, embedding_hidden_multiplier=0.5,
+                 project_patches_dim=0):
         # num_steps == len(dataset.steps)
         super().__init__()
+        self.project_patches_dim = project_patches_dim
         self.image_encoder = image_encoder
         self.num_steps = num_steps
         self.step_time_scale = step_time_scale
@@ -63,14 +65,20 @@ class SimpleCrossAttentionModel(torch.nn.Module):
             torch.nn.Linear(int(embedding_hidden_multiplier * embedding_size), embedding_size)
 
         )
+        if self.project_patches_dim:
+            self.patch_projection = torch.nn.Linear(clip_output_size, self.project_patches_dim)
 
-        self.attn = torch.nn.MultiheadAttention(embed_dim=embedding_size, kdim=clip_output_size,
-                                                vdim=clip_output_size,
+        kv_dim = self.project_patches_dim if self.project_patches_dim else clip_output_size
+        self.attn = torch.nn.MultiheadAttention(embed_dim=embedding_size, kdim=kv_dim,
+                                                vdim=kv_dim,
                                                 num_heads=4, batch_first=True)
 
     def forward(self, images, x_emb, step):
         bs = x_emb.shape[0]
         images = images.view(bs, -1, images.shape[-1])
+
+        if self.project_patches_dim:
+            images = self.patch_projection(images)
 
         step = step.to(x_emb.device).expand(bs)
         timestep = self.step_embedding(step)
