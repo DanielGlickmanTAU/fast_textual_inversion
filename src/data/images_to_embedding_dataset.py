@@ -167,6 +167,24 @@ def batch_embeddings(batch):
     return embeddings
 
 
+class CachedDataset(Dataset):
+    def __init__(self, original_dataset, images):
+        assert len(original_dataset) == len(images)
+        self.steps = original_dataset.steps
+        self.init_embd = original_dataset.init_embd
+        self.data = []
+        for i in range(len(original_dataset)):
+            result = original_dataset[i]
+            result['images'] = images[i]
+            self.data.append(result)
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, index):
+        return self.data[index]
+
+
 class ImagesEmbeddingDataloader(torch.utils.data.DataLoader):
     def __init__(self, ds, max_images_per_instance=999, *args, **kwargs):
         super(ImagesEmbeddingDataloader, self).__init__(ds, collate_fn=self.custom_collate, *args,

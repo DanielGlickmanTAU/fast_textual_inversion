@@ -25,8 +25,12 @@ class TrainConfig:
     model_type: str = 'simple'  # simplecorss
     step_time_scale: bool = False
     teacher_force: str = 'True'  # False/'linear'
-    embedding_hidden_multiplier: float = 0.5,
+    embedding_hidden_multiplier: float = 0.5
     project_patches_dim: float = 0.
+
+    # debug
+    train_set: str = 'train'
+    cache_clip: bool = False
 
 
 def set_config(cfg_):

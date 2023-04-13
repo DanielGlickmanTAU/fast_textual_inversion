@@ -60,6 +60,7 @@ def train_step(model, input: ImageEmbeddingInput, optimizer, wandb, teacher_forc
 
     input = input.to(device)
     images, embeddings, n_steps = input.images, input.embeddings, len(input.embeddings)
+    encoded_images = model.encode_images(images)
     for step in range(n_steps - 1):
         if teacher_force or step == 0:
             x_emb = embeddings[step]
