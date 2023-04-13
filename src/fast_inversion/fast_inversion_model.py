@@ -47,11 +47,14 @@ class SimpleModel(torch.nn.Module):
 
 
 class SimpleCrossAttentionModel(torch.nn.Module):
-    def __init__(self, num_steps, image_encoder):
+    def __init__(self, num_steps, image_encoder, step_time_scale=False):
         # num_steps == len(dataset.steps)
         super().__init__()
         self.image_encoder = image_encoder
         self.num_steps = num_steps
+        self.step_time_scale = step_time_scale
+        if step_time_scale:
+            self.time_scale = torch.nn.Parameter(torch.ones(self.num_steps, 1))
 
         # self.embedding_step_dim = embedding_size // 2
         self.embedding_step_dim = 256
@@ -72,8 +75,9 @@ class SimpleCrossAttentionModel(torch.nn.Module):
 
     def forward(self, images, x_emb, step):
         bs = x_emb.shape[0]
-        timestep = self.step_embedding(step.to(x_emb.device))
-        emb_with_timestep = torch.cat((x_emb, timestep.expand(bs, -1)), dim=1)
+        step = step.to(x_emb.device).expand(bs)
+        timestep = self.step_embedding(step)
+        emb_with_timestep = torch.cat((x_emb, timestep), dim=1)
 
         images = images.view(bs, -1, images.shape[-1])
         emb_new, attn = self.attn(emb_with_timestep.unsqueeze(1), images, images, need_weights=False)
@@ -82,6 +86,8 @@ class SimpleCrossAttentionModel(torch.nn.Module):
         emb_new = emb_new + emb_with_timestep
 
         emb_update = self.embedding_update(emb_new)
+        if self.step_time_scale:
+            emb_update = emb_update * torch.nn.functional.embedding(step, self.time_scale)
 
         return emb_update + x_emb
 

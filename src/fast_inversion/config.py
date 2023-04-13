@@ -10,7 +10,6 @@ class TrainConfig:
     learning_rate: float = 3e-4
     epochs: int = 100
     max_images_per_instance: int = 8
-    teacher_force: str = 'True'  # False/'linear'
 
     # experiment config
     exp_name: str = 'fast_inversion_train'
@@ -24,6 +23,8 @@ class TrainConfig:
 
     # model config
     model_type: str = 'simple'  # simplecorss
+    step_time_scale: bool = False
+    teacher_force: str = 'True'  # False/'linear'
 
 
 def set_config(cfg_):
