@@ -22,7 +22,7 @@ def compute_embeddings(dataset, preprocess, clip_model):
             images = images.to(compute.get_device()).unsqueeze(0)
             embedding = clip_model(images)
             embedding = embedding.view(-1, 257, 1024)
-            embeddings.append([x.squeeze(0) for x in embedding.split(1)])
+            embeddings.append([x.squeeze(0).to('cpu').clone() for x in embedding.split(1)])
             # embeddings.append(embedding)
     return embeddings
 
