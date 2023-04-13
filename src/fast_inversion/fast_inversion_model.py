@@ -124,8 +124,10 @@ def get_clip_image():
     def _clip_image_wrapper(batched_images):
         B, N, C, H, W = batched_images.shape
         batched_images = batched_images.view(-1, C, H, W)
-        data = clip(batched_images)
-        hidden_state = data['last_hidden_state']
+
+        data = clip(batched_images, output_hidden_states=True)
+        hidden_state = data.hidden_states[-2]
+
         a, n, d = hidden_state.shape
         return hidden_state.view(B, N, n, d)
 
@@ -170,3 +172,35 @@ def get_diffusion_pipeline(text_encoder, tokenizer, unet, vae):
 def generation_device():
     cfg = get_config()
     return 'cpu' if cfg.validate_images_on_cpu else device
+
+
+class VAEEmbeddings(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+        self.embed_dim = config.hidden_size
+        self.image_size = 64  # or whatever vae outsize is
+        self.patch_size = 2  # idk
+
+        self.patch_embedding = nn.Conv2d(
+            in_channels=4,  # if i use first layer of unet, it is 320...
+            out_channels=self.embed_dim,  # 720 in clip..
+            kernel_size=self.patch_size,  # 32 in clip
+            stride=self.patch_size,  # this makes non overlapping patches
+            bias=False,
+        )
+
+        self.num_patches = (self.image_size // self.patch_size) ** 2
+        self.num_positions = self.num_patches + 1
+        self.position_embedding = nn.Embedding(self.num_positions, self.embed_dim)
+        self.register_buffer("position_ids", torch.arange(self.num_positions).expand((1, -1)))
+
+    def forward(self, pixel_values: torch.FloatTensor) -> torch.Tensor:
+        batch_size = pixel_values.shape[0]
+        patch_embeds = self.patch_embedding(pixel_values)  # shape = [*, width, grid, grid]
+        patch_embeds = patch_embeds.flatten(2).transpose(1, 2)
+
+        class_embeds = self.class_embedding.expand(batch_size, 1, -1)
+        embeddings = torch.cat([class_embeds, patch_embeds], dim=1)
+        embeddings = embeddings + self.position_embedding(self.position_ids)
+        return embeddings
