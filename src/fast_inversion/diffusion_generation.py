@@ -6,10 +6,9 @@ from src.fast_inversion.fast_inversion_model import get_clip_tokenizer, get_clip
 from src.misc import compute
 import wandb
 
-num_inference_steps = 25
+# num_inference_steps = 25
+num_inference_steps = 10
 
-
-# num_inference_steps = 10
 
 @torch.no_grad()
 def generate_images(embedding, path, experiment, config: TrainConfig):
@@ -33,11 +32,12 @@ def generate_images(embedding, path, experiment, config: TrainConfig):
 
     prompt = config.num_images_per_person_to_log * [validation_prompt]
     images = pipeline(prompt, num_inference_steps=num_inference_steps).images
-    if experiment:
+    if experiment is not None:
+        print('logging image experiment')
         experiment.log(
             {
                 "validation": [
-                    wandb.Image(image, caption=f"path: {path}. {i}: {validation_prompt}")
+                    wandb.Image(image, caption=f"path: {path.replace('/', '_')}. {i}: {validation_prompt}")
                     for i, image in enumerate(images)
                 ]
             })
