@@ -74,9 +74,7 @@ class ImagesEmbeddingDataset(Dataset):
         datadir = os.path.join(self.base_dir, 'data')
         all_dirs = [os.path.join(datadir, instance_id) for instance_id in self.split]
         dirs_with_embeddings = [dir for dir in all_dirs if os.path.exists(dir + '/embeddings')]
-        print(f'WARNING: only {len(dirs_with_embeddings)} out of {len(all_dirs)} instances have embeddings')
-        print(f'WARNING: only {len(dirs_with_embeddings)} out of {len(all_dirs)} instances have embeddings')
-        print(f'WARNING: only {len(dirs_with_embeddings)} out of {len(all_dirs)} instances have embeddings')
+
         return dirs_with_embeddings
 
     def __len__(self):
