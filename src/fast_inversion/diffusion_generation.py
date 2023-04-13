@@ -33,13 +33,14 @@ def generate_images(embedding, path, experiment, config: TrainConfig):
 
     prompt = config.num_images_per_person_to_log * [validation_prompt]
     images = pipeline(prompt, num_inference_steps=num_inference_steps).images
-    experiment.log(
-        {
-            "validation": [
-                wandb.Image(image, caption=f"path: {path}. {i}: {validation_prompt}")
-                for i, image in enumerate(images)
-            ]
-        })
+    if experiment:
+        experiment.log(
+            {
+                "validation": [
+                    wandb.Image(image, caption=f"path: {path}. {i}: {validation_prompt}")
+                    for i, image in enumerate(images)
+                ]
+            })
 
     del text_encoder
     del vae
