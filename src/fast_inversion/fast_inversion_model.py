@@ -47,7 +47,7 @@ class SimpleModel(torch.nn.Module):
 
 
 class SimpleCrossAttentionModel(torch.nn.Module):
-    def __init__(self, num_steps, image_encoder, step_time_scale=False):
+    def __init__(self, num_steps, image_encoder, step_time_scale=False, embedding_hidden_multiplier=0.5):
         # num_steps == len(dataset.steps)
         super().__init__()
         self.image_encoder = image_encoder
@@ -56,36 +56,33 @@ class SimpleCrossAttentionModel(torch.nn.Module):
         if step_time_scale:
             self.time_scale = torch.nn.Parameter(torch.ones(self.num_steps, 1))
 
-        # self.embedding_step_dim = embedding_size // 2
-        self.embedding_step_dim = 256
-
-        self.step_embedding = torch.nn.Embedding(num_steps, self.embedding_step_dim)
-        self.embedding_step_with_timestep_dim = embedding_size + self.embedding_step_dim
+        self.step_embedding = torch.nn.Embedding(num_steps, embedding_size)
         self.embedding_update = torch.nn.Sequential(
-            torch.nn.Linear(self.embedding_step_with_timestep_dim,
-                            (self.embedding_step_with_timestep_dim) // 2),
+            torch.nn.Linear(embedding_size, int(embedding_hidden_multiplier * embedding_size)),
             torch.nn.ReLU(),
-            torch.nn.Linear((self.embedding_step_with_timestep_dim) // 2, embedding_size)
+            torch.nn.Linear(int(embedding_hidden_multiplier * embedding_size), embedding_size)
 
         )
 
-        self.attn = torch.nn.MultiheadAttention(embed_dim=self.embedding_step_with_timestep_dim, kdim=clip_output_size,
+        self.attn = torch.nn.MultiheadAttention(embed_dim=embedding_size, kdim=clip_output_size,
                                                 vdim=clip_output_size,
                                                 num_heads=4, batch_first=True)
 
     def forward(self, images, x_emb, step):
         bs = x_emb.shape[0]
+        images = images.view(bs, -1, images.shape[-1])
+
         step = step.to(x_emb.device).expand(bs)
         timestep = self.step_embedding(step)
-        emb_with_timestep = torch.cat((x_emb, timestep), dim=1)
+        # emb_with_timestep = torch.cat((x_emb, timestep), dim=1)
+        emb_with_timestep = x_emb + timestep
 
-        images = images.view(bs, -1, images.shape[-1])
         emb_new, attn = self.attn(emb_with_timestep.unsqueeze(1), images, images, need_weights=False)
         emb_new = emb_new.squeeze(1)
 
         emb_new = emb_new + emb_with_timestep
-
         emb_update = self.embedding_update(emb_new)
+
         if self.step_time_scale:
             emb_update = emb_update * torch.nn.functional.embedding(step, self.time_scale)
 
