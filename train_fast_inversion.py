@@ -25,7 +25,7 @@ eval_loader = ImagesEmbeddingDataloader(eval_ds, max_images_per_instance=cfg.max
 if cfg.model_type == 'simple':
     model = SimpleModel(len(ds.steps), img_clip)
 if cfg.model_type == 'simplecross':
-    model = SimpleCrossAttentionModel(len(ds.steps), img_clip)
+    model = SimpleCrossAttentionModel(len(ds.steps), img_clip, step_time_scale=cfg.step_time_scale)
 model = model.to(compute.get_device())
 fast_inversion.set_init_emb(ds.init_embd)
 
