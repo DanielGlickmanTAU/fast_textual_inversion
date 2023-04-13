@@ -1,3 +1,5 @@
+import random
+
 import torch.nn.functional as F
 import torch
 
@@ -33,7 +35,9 @@ def train(model, train_loader, eval_dataloader, args: TrainConfig):
     for epoch in range(args.epochs):
         if wandb:
             wandb.log({'epoch': epoch})
-        train_epoch(model, train_loader, optimizer, wandb)
+        teacher_force = random.uniform(0, 1) > (
+                epoch / args.epochs) if args.teacher_force == 'linear' else bool(args.teacher_force)
+        train_epoch(model, train_loader, optimizer, wandb, teacher_force)
         if args.validate_loss:
             eval_model_epoch(model, eval_dataloader, wandb)
         if (epoch + 1) % args.log_images_every_n_epochs == 0 and wandb:

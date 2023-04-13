@@ -9,7 +9,8 @@ class TrainConfig:
     batch_size: int = 32
     learning_rate: float = 3e-4
     epochs: int = 100
-    max_images_per_instance: int = 100
+    max_images_per_instance: int = 8
+    teacher_force: str = 'True'  # False/'linear'
 
     # experiment config
     exp_name: str = 'fast_inversion_train'
