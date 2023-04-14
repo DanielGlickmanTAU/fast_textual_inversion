@@ -59,7 +59,7 @@ def train_step(model, input: ImageEmbeddingInput, optimizer, wandb, teacher_forc
     stats = {}
 
     input = input.to(device)
-    images, embeddings, n_steps = input.images, input.embeddings, len(input.embeddings)
+    images, embeddings, n_steps, is_real = input.images, input.embeddings, len(input.embeddings), input.is_real
     encoded_images = model.encode_images(images)
     for step in range(n_steps - 1):
         if teacher_force or step == 0:
@@ -67,7 +67,7 @@ def train_step(model, input: ImageEmbeddingInput, optimizer, wandb, teacher_forc
         else:
             x_emb = emb_predicted.detach().clone()
 
-        emb_predicted = model(encoded_images, x_emb, torch.tensor(step, device=device))
+        emb_predicted = model(encoded_images, x_emb, torch.tensor(step, device=device), is_real=is_real)
         emb_target = embeddings[step + 1]
 
         loss = F.mse_loss(emb_predicted.float(), emb_target.float(), reduction="mean")
