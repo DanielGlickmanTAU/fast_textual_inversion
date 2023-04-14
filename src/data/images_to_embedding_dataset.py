@@ -139,6 +139,7 @@ class ImageEmbeddingInput(OrderedDict):
     is_real: torch.Tensor
     # list of size num_embeddings(0 entry is the initial embedding, i.e "person"). Each entry is size (B,d)
     embeddings: List[torch.Tensor]
+    path: List[str] = None
 
     def __len__(self):
         return len(self.images)
@@ -146,7 +147,8 @@ class ImageEmbeddingInput(OrderedDict):
     def to(self, device):
         return ImageEmbeddingInput(images=self.images.to(device),
                                    is_real=self.is_real.to(device),
-                                   embeddings=[emb.to(device) for emb in self.embeddings]
+                                   embeddings=[emb.to(device) for emb in self.embeddings],
+                                   path=self.path
                                    )
 
 
@@ -204,4 +206,4 @@ class ImagesEmbeddingDataloader(torch.utils.data.DataLoader):
         is_real = torch.stack(is_real)
 
         embeddings_to_step = batch_embeddings(batch)
-        return ImageEmbeddingInput(padded_images, is_real, embeddings_to_step)
+        return ImageEmbeddingInput(padded_images, is_real, embeddings_to_step, [x['path'] for x in batch])

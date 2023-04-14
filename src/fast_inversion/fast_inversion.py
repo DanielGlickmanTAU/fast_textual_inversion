@@ -71,8 +71,11 @@ def train_step(model, input: ImageEmbeddingInput, optimizer, wandb, teacher_forc
         emb_target = embeddings[step + 1]
 
         loss = F.mse_loss(emb_predicted.float(), emb_target.float(), reduction="mean")
-        loss.backward()
-        optimizer.step()
+        if loss <= 1.:
+            loss.backward()
+            optimizer.step()
+        else:
+            print(f"Loss too high: {loss}. paths: {input.paths}")
         optimizer.zero_grad()
 
         stats[f'loss_step{step}'] = loss.item()
