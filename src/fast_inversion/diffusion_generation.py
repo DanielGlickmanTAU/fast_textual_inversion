@@ -6,8 +6,10 @@ from src.fast_inversion.fast_inversion_model import get_clip_tokenizer, get_clip
 from src.misc import compute
 import wandb
 
-# num_inference_steps = 25
-num_inference_steps = 10
+num_inference_steps = 25
+
+
+# num_inference_steps = 10
 
 
 @torch.no_grad()
