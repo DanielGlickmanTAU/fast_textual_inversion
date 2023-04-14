@@ -73,19 +73,20 @@ class SimpleCrossAttentionModel(torch.nn.Module):
                                                 vdim=kv_dim,
                                                 num_heads=4, batch_first=True)
 
-    def forward(self, images, x_emb, step):
+    def forward(self, images, x_emb, step, is_real=None):
         bs = x_emb.shape[0]
+        P = images.shape[2]
         images = images.view(bs, -1, images.shape[-1])
-
+        key_padding_mask = ~is_real.bool().unsqueeze(2).repeat(1, 1, P).view(bs, -1) if is_real is not None else None
         if self.project_patches_dim:
             images = self.patch_projection(images)
 
         step = step.to(x_emb.device).expand(bs)
         timestep = self.step_embedding(step)
-        # emb_with_timestep = torch.cat((x_emb, timestep), dim=1)
         emb_with_timestep = x_emb + timestep
 
-        emb_new, attn = self.attn(emb_with_timestep.unsqueeze(1), images, images, need_weights=False)
+        emb_new, attn = self.attn(emb_with_timestep.unsqueeze(1), images, images, need_weights=False,
+                                  key_padding_mask=key_padding_mask)
         emb_new = emb_new.squeeze(1)
 
         emb_new = emb_new + emb_with_timestep
